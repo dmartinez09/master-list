@@ -42,6 +42,9 @@ export default function Portfolio() {
   const [showScrollHint, setShowScrollHint] = useState(false);
   const kanbanRef = useRef<HTMLDivElement>(null);
 
+  const getTrack = () =>
+    kanbanRef.current?.querySelector<HTMLElement>('.pipeline-track') ?? null;
+
   // Apply navigation state when arriving with new filters
   useEffect(() => {
     const s = location.state as Partial<Filters> & { view?: ViewMode } | null;
@@ -70,11 +73,22 @@ export default function Portfolio() {
     const firstFourEmpty = PIPELINE_ORDER.slice(0, 4).every(e => (byEstado[e] ?? []).length === 0);
     if (filtered.length > 0 && firstFourEmpty) {
       setShowScrollHint(true);
-      if (kanbanRef.current) kanbanRef.current.scrollLeft = 0;
+      const track = getTrack();
+      if (track) track.scrollLeft = 0;
     } else {
       setShowScrollHint(false);
     }
   }, [byEstado, view, filtered.length]);
+
+  // Hide hint when user scrolls the pipeline-track
+  useEffect(() => {
+    if (!showScrollHint) return;
+    const track = getTrack();
+    if (!track) return;
+    const hide = () => setShowScrollHint(false);
+    track.addEventListener('scroll', hide);
+    return () => track.removeEventListener('scroll', hide);
+  }, [showScrollHint]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -118,7 +132,6 @@ export default function Portfolio() {
           {/* Content */}
           <div
             ref={kanbanRef}
-            onScroll={() => setShowScrollHint(false)}
             className="flex-1 overflow-auto scrollbar-thin p-4"
           >
             {view === 'pipeline' ? (
@@ -136,7 +149,7 @@ export default function Portfolio() {
       {showScrollHint && view === 'pipeline' && (
         <button
           onClick={() => {
-            kanbanRef.current?.scrollBy({ left: 500, behavior: 'smooth' });
+            getTrack()?.scrollBy({ left: 500, behavior: 'smooth' });
           }}
           className="fixed right-6 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-1.5 animate-pulse"
           title="Ver resultados"
