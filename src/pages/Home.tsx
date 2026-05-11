@@ -234,8 +234,8 @@ const BLOQUEADAS_REALES = [
   { id: 'ID-119', titulo: 'Mejora del reporte de ventas SAP',                   pais: 'Point Andina', prio: 'Alta', razon: 'Diego y Yeni trabajan con Seidor. Esperando aprobación de Yeni para aceptar cambios.',           decision: 'Aprobación final del área comercial Andina.',                                                      dependeDe: 'Gerencia Comercial Andina' },
   { id: 'ID-133', titulo: 'Equipo tecnológico colaborador Brasil',              pais: 'Grupo Point', prio: 'Alta', razon: 'Marco Carvalho aún no envió la cotización requerida para iniciar la compra.',                  decision: 'Seguimiento al solicitante. Definir si compra se hace local o vía proveedor regional.',           dependeDe: 'Solicitante + CFO' },
   { id: 'ID-053', titulo: 'Evaluación Datawarehouse del proveedor ERP Siesa',   pais: 'Colombia',    prio: 'Media', razon: 'Reunión con proveedor confirmó: NO cuentan con Datawarehouse. Posible piloto Q3 2026.',          decision: '¿Esperar el piloto del proveedor o desarrollar Datawarehouse propio?',                            dependeDe: 'C-Suite (decisión arquitectura)' },
-  { id: 'ID-033', titulo: 'Conciliación bancaria automática (Chile)',           pais: 'Chile',       prio: 'Media', razon: 'C-Suite decidió NO contratar el módulo automático del proveedor del ERP.',                       decision: 'Etapa interna cerrada. Iniciativa formalmente descartada.',                                       dependeDe: 'Decisión ya tomada (cerrada)' },
-  { id: 'ID-089', titulo: 'Cotizador comercial digital Point Andina',           pais: 'Point Andina', prio: 'Baja', razon: 'Necesidad cubierta por la implementación de App Mobile SAP. Iniciativa absorbida.',           decision: 'Etapa cerrada. Funcionalidad entregada por App Mobile.',                                          dependeDe: 'Resuelto (vía SAP Mobile)' },
+  { id: 'ID-033', titulo: 'Conciliación bancaria automática (Chile)',           pais: 'Chile',       prio: 'Media', razon: 'C-Suite decidió NO contratar el módulo automático del proveedor del ERP.',                       decision: 'Etapa interna cerrada. Hallazgo formalmente descartado.',                                        dependeDe: 'Decisión ya tomada (cerrada)' },
+  { id: 'ID-089', titulo: 'Cotizador comercial digital Point Andina',           pais: 'Point Andina', prio: 'Baja', razon: 'Necesidad cubierta por la implementación de App Mobile SAP. Hallazgo absorbido.',             decision: 'Etapa cerrada. Funcionalidad entregada por App Mobile.',                                          dependeDe: 'Resuelto (vía SAP Mobile)' },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
@@ -317,7 +317,7 @@ function DeepCapabilityAnalysis() {
           <div>
             <p className="text-sm font-bold text-brand-900 mb-1">La Master List es la fuente oficial del plan</p>
             <p className="text-xs text-brand-800 leading-relaxed">
-              Cuando se leen las 174 iniciativas en detalle — descripción, objetivos, puntos de dolor, plan de acción y logros —
+              Cuando se leen los 174 hallazgos en detalle — descripción, objetivos, puntos de dolor, plan de acción y logros —
               emergen <strong>6 capacidades estratégicas</strong> que el Grupo está construyendo en simultáneo. Cada una con su
               "hoy" concreto, su "próximo nivel" definido y un conjunto de tareas reales en marcha. Selecciona una capacidad
               para ver el detalle.
@@ -354,7 +354,7 @@ function DeepCapabilityAnalysis() {
                   {c.eje}
                 </p>
                 <p className="text-[10px]" style={{ color: isActive ? 'rgba(255,255,255,0.8)' : '#64748b' }}>
-                  {c.totalIniciativas} iniciativas · {c.entregadas} entregadas
+                  {c.totalIniciativas} hallazgos · {c.entregadas} entregados
                 </p>
               </div>
             </button>
@@ -409,7 +409,7 @@ function DeepCapabilityAnalysis() {
         <div className="bg-white border-t border-gray-100">
           <div className="px-5 py-3 flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-              Iniciativas que construyen esta capacidad ({cap.totalIniciativas})
+              Hallazgos que construyen esta capacidad ({cap.totalIniciativas})
             </p>
             <button
               onClick={() => navigate('/portafolio')}
@@ -456,7 +456,7 @@ function TangibleWinsGrid() {
       <div className="bg-brand-50 border border-brand-200 rounded-xl p-3 mb-4 flex items-start gap-2.5">
         <CheckCircle2 size={16} className="text-brand-600 shrink-0 mt-0.5" />
         <p className="text-xs text-brand-900 leading-relaxed">
-          <strong>33 iniciativas cerradas con valor real entregado</strong>, no solo informes. Estas son las 6 más significativas
+          <strong>33 hallazgos cerrados con valor real entregado</strong>, no solo informes. Estos son los 6 más significativos
           del último año — texto extraído de la columna "Cierre y Logros Obtenidos" del Master List.
         </p>
       </div>
@@ -550,8 +550,8 @@ function PriorityMatrix() {
     <div>
       <div className="bg-brand-50 border border-brand-200 rounded-xl p-3 mb-4">
         <p className="text-xs text-brand-900 font-medium leading-relaxed">
-          De las <strong>68 iniciativas de Alta prioridad</strong>, ya hay <strong>19 cerradas</strong> y <strong>20 en ejecución</strong> (57%).
-          Las <strong>4 bloqueadas</strong> en alta dependen de decisiones fuera del área, no de capacidad ejecutora.
+          De los <strong>68 hallazgos de Alta prioridad</strong>, ya hay <strong>19 cerrados</strong> y <strong>20 en ejecución</strong> (57%).
+          Los <strong>4 bloqueados</strong> en alta dependen de decisiones fuera del área, no de capacidad ejecutora.
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -653,7 +653,7 @@ function BlockedDecisions({ onNavigate }: { onNavigate: () => void }) {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-white/15 rounded-xl flex items-center justify-center"><AlertTriangle size={16} className="text-white" /></div>
           <div>
-            <p className="text-sm font-bold text-white">7 iniciativas bloqueadas — el detalle</p>
+            <p className="text-sm font-bold text-white">7 hallazgos bloqueados — el detalle</p>
             <p className="text-xs text-red-200 leading-relaxed">
               4 dependen de decisiones del C-Suite o áreas. 2 ya están cerradas/superadas. 1 espera aprobación del solicitante.
             </p>
@@ -716,15 +716,12 @@ export default function Home() {
             Grupo Point · Gerencia Corporativa de Tecnologías Avanzadas
           </p>
           <h1 className="text-3xl md:text-5xl font-black leading-[1.1] mb-4">
-            174 iniciativas que llevan a Point<br className="hidden md:block" /> al siguiente nivel tecnológico
+            Point avanza al siguiente<br className="hidden md:block" /> nivel tecnológico
           </h1>
-          <p className="text-brand-200 text-sm md:text-base max-w-2xl mb-3 leading-relaxed">
-            Cada tarea del Master List, leída en detalle — descripción, objetivos, plan de acción, cuellos de botella, logros —
-            forma parte de un plan coherente que construye <strong className="text-white">seis capacidades estratégicas</strong> en simultáneo.
+          <p className="text-brand-200 text-sm md:text-base max-w-2xl mb-8 leading-relaxed">
+            174 hallazgos trazan el camino — descripción, objetivos, plan de acción, cuellos de botella y logros —
+            que construye <strong className="text-white">seis capacidades estratégicas</strong> en simultáneo.
             Esta web es ese plan, hecho visible.
-          </p>
-          <p className="text-white/70 text-xs italic max-w-2xl mb-8">
-            174 iniciativas · 7 países · 33 entregadas · 31 en ejecución activa · 6 capacidades en construcción.
           </p>
           <div className="flex flex-wrap gap-3">
             <button onClick={() => navigate('/portafolio')} className="inline-flex items-center gap-2 bg-white text-brand-700 font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-brand-50 transition-all text-sm">
@@ -742,7 +739,7 @@ export default function Home() {
       <section className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-8">
           <div className="grid grid-cols-2 md:grid-cols-5 divide-x divide-gray-100">
-            <AnimatedKpi value={174} label="Iniciativas totales" sub="7 países del Grupo" delay={0} />
+            <AnimatedKpi value={174} label="Hallazgos totales" sub="7 países del Grupo" delay={0} />
             <AnimatedKpi value={33} label="Ya entregadas" sub="Valor real comprobado" color="#00A651" delay={100} />
             <AnimatedKpi value={31} label="En ejecución" sub="Avance medible" color="#2563eb" delay={200} />
             <AnimatedKpi value={6}  label="Capacidades en construcción" sub="Ejes del plan TA/TI" color="#7c3aed" delay={300} />
@@ -756,7 +753,7 @@ export default function Home() {
         {/* ── Análisis profundo del Master List ─────────────────── */}
         <ChartCard
           title="Las 6 capacidades estratégicas que emergen del Master List"
-          subtitle="Lectura agregada de las 174 iniciativas. Cada eje muestra el estado de hoy, el próximo nivel concreto y las tareas reales en ejecución que lo construyen."
+          subtitle="Lectura agregada de los 174 hallazgos. Cada eje muestra el estado de hoy, el próximo nivel concreto y las tareas reales en ejecución que lo construyen."
           accent="linear-gradient(90deg, #2563eb, #7c3aed, #00A651)"
         >
           <DeepCapabilityAnalysis />
@@ -774,8 +771,8 @@ export default function Home() {
         {/* ── Pipeline + Priority ───────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <ChartCard
-            title="Pipeline ejecutivo de las 174 iniciativas"
-            subtitle="Dónde está cada iniciativa en su ciclo de vida. Pasa el cursor sobre cada estado para ver qué significa."
+            title="Pipeline ejecutivo de los 174 hallazgos"
+            subtitle="Dónde está cada hallazgo en su ciclo de vida. Pasa el cursor sobre cada estado para ver qué significa."
             accent="linear-gradient(90deg, #2563eb, #7c3aed)"
           >
             <ExecutiveFunnel />
@@ -793,7 +790,7 @@ export default function Home() {
         {/* ── Country achievement ───────────────────────────────── */}
         <ChartCard
           title="Entrega por país — quién está más avanzado"
-          subtitle="Iniciativas completadas, en ejecución, pendientes y bloqueadas por operación. Cada país tiene su ritmo y su backlog propio."
+          subtitle="Hallazgos completados, en ejecución, pendientes y bloqueados por operación. Cada país tiene su ritmo y su backlog propio."
           accent="linear-gradient(90deg, #00A651, #0891b2)"
         >
           <CountryAchievement />
