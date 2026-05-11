@@ -206,8 +206,13 @@ const PORTFOLIO_STEPS: Step[] = [
     title: 'Vistas disponibles',
     content: 'Kanban organiza las iniciativas por estado en columnas. Tabla las muestra en formato de lista con todos los campos. Cambia según lo que necesites ver.',
   },
+  {
+    selector: '[data-tour="col-manager"]',
+    title: 'Gestionar columnas Kanban',
+    content: 'Personaliza el tablero: muestra u oculta columnas según lo que necesites ver, y reordénalas a tu gusto. También puedes mover cada columna con las flechas ← → en su encabezado. Los cambios se guardan automáticamente.',
+  },
 ];
 
 export function PortfolioTour() {
-  return <TourEngine steps={PORTFOLIO_STEPS} storageKey="ta_portfolio_tour_v1_done" />;
+  return <TourEngine steps={PORTFOLIO_STEPS} storageKey="ta_portfolio_tour_v2_done" />;
 }

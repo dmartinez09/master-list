@@ -181,6 +181,7 @@ export default function Portfolio() {
               {view === 'pipeline' && (
                 <div className="relative">
                   <button
+                    data-tour="col-manager"
                     onClick={() => setShowColMgr(s => !s)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-lg font-medium transition-colors ${
                       showColMgr
