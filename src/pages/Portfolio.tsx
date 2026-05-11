@@ -10,6 +10,7 @@ import { applyFilters, EMPTY_FILTERS } from '../utils/filters';
 import type { Filters, Iniciativa } from '../types';
 import { EstadoBadge } from '../components/ui/Badge';
 import { LayoutGrid, Table2, Download, ChevronRight } from 'lucide-react';
+import { PortfolioTour } from '../components/ui/Tour';
 
 type ViewMode = 'pipeline' | 'table';
 
@@ -113,7 +114,7 @@ export default function Portfolio() {
               >
                 <Download size={13} /> Exportar CSV
               </button>
-              <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+              <div className="flex border border-gray-200 rounded-lg overflow-hidden" data-tour="view-toggle">
                 {(['pipeline', 'table'] as ViewMode[]).map(v => (
                   <button
                     key={v}
@@ -143,6 +144,7 @@ export default function Portfolio() {
         </main>
       </div>
 
+      <PortfolioTour />
       {selected && <InitiativeModal iniciativa={selected} onClose={() => setSelected(null)} />}
 
       {/* Scroll hint arrow */}

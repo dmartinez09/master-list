@@ -60,7 +60,7 @@ export function Sidebar({ data, filters, onChange }: SidebarProps) {
     .filter(([k, v]) => k !== 'search' && Array.isArray(v) && v.length > 0).length;
 
   return (
-    <aside className="w-64 shrink-0 bg-white border-r border-gray-100 overflow-y-auto scrollbar-thin h-full">
+    <aside className="w-64 shrink-0 bg-white border-r border-gray-100 overflow-y-auto scrollbar-thin h-full" data-tour="sidebar-filters">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-bold text-gray-800">Filtros</h2>
         {activeCount > 0 && (
