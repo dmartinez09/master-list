@@ -32,7 +32,7 @@ function TourEngine({ steps, storageKey, prerequisiteKey }: TourProps) {
 
   const updateRect = useCallback(() => {
     if (!visible) return;
-    const el = document.querySelector(steps[step].selector);
+    const el = steps[step].selector ? document.querySelector(steps[step].selector) : null;
     if (el) {
       const r = el.getBoundingClientRect();
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
