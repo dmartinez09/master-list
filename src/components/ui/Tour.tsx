@@ -41,6 +41,15 @@ function TourEngine({ steps, storageKey }: TourProps) {
     return () => window.removeEventListener('resize', updateRect);
   }, [updateRect]);
 
+  // Dismiss with Escape key
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dismiss(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   if (!visible) return null;
 
   const current = steps[step];
@@ -53,8 +62,31 @@ function TourEngine({ steps, storageKey }: TourProps) {
 
   const next = () => isLast ? dismiss() : setStep(s => s + 1);
 
-  const tooltipLeft = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
-  const tooltipTop  = rect ? rect.top + rect.height + 14 : window.innerHeight / 2 - 80;
+  // Smart positioning: tall elements (like sidebar) get tooltip to the right
+  const isTall = rect && rect.height > window.innerHeight * 0.4;
+  let tooltipTop: number;
+  let tooltipLeft: number;
+  let arrowDir: 'up' | 'left' | 'none' = 'none';
+
+  if (!rect) {
+    tooltipTop = window.innerHeight / 2 - 80;
+    tooltipLeft = window.innerWidth / 2;
+  } else if (isTall) {
+    // Position to the right of the element, vertically centered
+    tooltipTop = window.innerHeight / 2 - 80;
+    tooltipLeft = rect.left + rect.width + 160;
+    arrowDir = 'left';
+  } else {
+    tooltipTop = rect.top + rect.height + 14;
+    tooltipLeft = rect.left + rect.width / 2;
+    arrowDir = 'up';
+    // Clamp if goes below viewport
+    if (tooltipTop + 180 > window.innerHeight) {
+      tooltipTop = rect.top - 180;
+      arrowDir = 'none';
+    }
+  }
+
   const clampedLeft = Math.min(Math.max(tooltipLeft, 160), window.innerWidth - 160);
 
   const PAD = 6;
@@ -88,10 +120,16 @@ function TourEngine({ steps, storageKey }: TourProps) {
         className="fixed z-[1000] w-72 bg-white rounded-xl shadow-2xl p-4 pointer-events-auto"
         style={{ top: tooltipTop, left: clampedLeft, transform: 'translateX(-50%)' }}
       >
-        {rect && (
+        {arrowDir === 'up' && (
           <div
             className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0"
             style={{ borderLeft: '8px solid transparent', borderRight: '8px solid transparent', borderBottom: '8px solid white' }}
+          />
+        )}
+        {arrowDir === 'left' && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -left-2 w-0 h-0"
+            style={{ borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderRight: '8px solid white' }}
           />
         )}
 
