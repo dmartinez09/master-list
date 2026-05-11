@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Navbar } from '../components/ui/Navbar';
 import { Sidebar } from '../components/ui/Sidebar';
@@ -9,7 +9,7 @@ import { PIPELINE_ORDER } from '../data/catalogs';
 import { applyFilters, EMPTY_FILTERS } from '../utils/filters';
 import type { Filters, Iniciativa } from '../types';
 import { EstadoBadge } from '../components/ui/Badge';
-import { LayoutGrid, Table2, Download } from 'lucide-react';
+import { LayoutGrid, Table2, Download, ChevronRight } from 'lucide-react';
 
 type ViewMode = 'pipeline' | 'table';
 
@@ -102,7 +102,7 @@ export default function Portfolio() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-auto scrollbar-thin p-4">
+          <div className={`flex-1 ${view === 'pipeline' ? 'overflow-hidden' : 'overflow-auto scrollbar-thin p-4'}`}>
             {view === 'pipeline' ? (
               <PipelineView byEstado={byEstado} onSelect={setSelected} />
             ) : (
@@ -119,29 +119,78 @@ export default function Portfolio() {
 
 /* ── Pipeline / Kanban view ─────────────────────────────────────── */
 function PipelineView({ byEstado, onSelect }: { byEstado: Record<string, Iniciativa[]>; onSelect: (i: Iniciativa) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [showHint, setShowHint] = useState(false);
+
+  const totalItems = useMemo(
+    () => Object.values(byEstado).reduce((sum, arr) => sum + arr.length, 0),
+    [byEstado]
+  );
+
+  const firstColumnsEmpty = useMemo(
+    () => PIPELINE_ORDER.slice(0, 4).every(e => (byEstado[e] ?? []).length === 0),
+    [byEstado]
+  );
+
+  useEffect(() => {
+    if (totalItems > 0 && firstColumnsEmpty) {
+      setShowHint(true);
+      if (containerRef.current) containerRef.current.scrollLeft = 0;
+    } else {
+      setShowHint(false);
+    }
+  }, [byEstado, totalItems, firstColumnsEmpty]);
+
+  const handleScroll = () => { if (showHint) setShowHint(false); };
+
+  const scrollRight = () => {
+    containerRef.current?.scrollBy({ left: 480, behavior: 'smooth' });
+  };
+
   return (
-    <div className="pipeline-track h-full">
-      {PIPELINE_ORDER.map(estado => {
-        const cols = byEstado[estado] ?? [];
-        return (
-          <div key={estado} className="pipeline-col">
-            <div className="flex items-center gap-2 mb-3">
-              <EstadoBadge label={estado} />
-              <span className="text-xs text-gray-400 font-bold">{cols.length}</span>
+    <div className="relative h-full">
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="pipeline-track h-full overflow-x-auto p-4"
+      >
+        {PIPELINE_ORDER.map(estado => {
+          const cols = byEstado[estado] ?? [];
+          return (
+            <div key={estado} className="pipeline-col">
+              <div className="flex items-center gap-2 mb-3">
+                <EstadoBadge label={estado} />
+                <span className="text-xs text-gray-400 font-bold">{cols.length}</span>
+              </div>
+              <div className="space-y-2">
+                {cols.map(i => (
+                  <InitiativeCard key={i.id} iniciativa={i} onClick={onSelect} />
+                ))}
+                {cols.length === 0 && (
+                  <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-300">
+                    Sin iniciativas
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              {cols.map(i => (
-                <InitiativeCard key={i.id} iniciativa={i} onClick={onSelect} />
-              ))}
-              {cols.length === 0 && (
-                <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-300">
-                  Sin iniciativas
-                </div>
-              )}
-            </div>
+          );
+        })}
+      </div>
+
+      {showHint && (
+        <button
+          onClick={scrollRight}
+          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center gap-1.5 animate-pulse"
+          title="Ver resultados →"
+        >
+          <div className="bg-red-500/60 hover:bg-red-500/80 text-white rounded-full p-3 shadow-xl transition-colors">
+            <ChevronRight size={30} strokeWidth={2.5} />
           </div>
-        );
-      })}
+          <span className="text-[10px] font-semibold text-red-500/80 bg-white/90 px-2 py-0.5 rounded-full shadow">
+            Ver resultados
+          </span>
+        </button>
+      )}
     </div>
   );
 }
