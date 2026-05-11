@@ -315,7 +315,7 @@ function DeepCapabilityAnalysis() {
         <div className="flex items-start gap-3">
           <BookOpen size={18} className="text-brand-700 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold text-brand-900 mb-1">El plan vive en el Master List, no en una presentación</p>
+            <p className="text-sm font-bold text-brand-900 mb-1">La Master List es la fuente oficial del plan</p>
             <p className="text-xs text-brand-800 leading-relaxed">
               Cuando se leen las 174 iniciativas en detalle — descripción, objetivos, puntos de dolor, plan de acción y logros —
               emergen <strong>6 capacidades estratégicas</strong> que el Grupo está construyendo en simultáneo. Cada una con su
