@@ -1,6 +1,3 @@
-# Data files with internal/personal information
-src/data/initiatives_raw.json
-
 # Logs
 logs
 *.log
