@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50:  #f0faf4;
+  --color-brand-100: #d4f3e2;
+  --color-brand-200: #aae6c6;
+  --color-brand-300: #6fd1a4;
+  --color-brand-400: #3ab87f;
+  --color-brand-500: #00A651;
+  --color-brand-600: #008f45;
+  --color-brand-700: #006f34;
+  --color-brand-800: #005229;
+  --color-brand-900: #003a1c;
+  --color-brand-950: #001f0e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #f0f2f5;
+  color: #1a1f2e;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { width: 100%; min-height: 100svh; }
+
+/* ── Scrollbar ───────────────────────────────────── */
+.scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 2px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #c8c8c8; border-radius: 2px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
+
+/* ── Hero gradient ───────────────────────────────── */
+.gradient-hero {
+  background: linear-gradient(145deg, #001a0b 0%, #003a1c 45%, #006f34 80%, #00A651 100%);
+  position: relative;
+  overflow: hidden;
+}
+.gradient-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 60% at 80% 40%, rgba(0,166,81,0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── 3D Card tilt ────────────────────────────────── */
+.card-3d {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.card-3d:hover {
+  transform: perspective(900px) rotateX(-3deg) rotateY(5deg) translateY(-4px);
+  box-shadow: 14px 20px 40px rgba(0,0,0,0.12), -4px -4px 16px rgba(255,255,255,0.85);
+}
+.card-3d-accent:hover {
+  transform: perspective(900px) rotateX(-3deg) rotateY(5deg) translateY(-4px);
+  box-shadow: 14px 20px 40px rgba(0,166,81,0.3), -4px -4px 16px rgba(0,200,80,0.15);
+}
+
+/* ── Card hover (kanban) ─────────────────────────── */
+.card-hover { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,166,81,0.13), 0 2px 8px rgba(0,0,0,0.07);
+}
+
+/* ── Animations ──────────────────────────────────── */
+.fade-in { animation: fadeIn 0.22s ease-in; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.slide-in-right { animation: slideInRight 0.3s ease-out; }
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fillBar {
+  from { width: 0%; opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.5); opacity: 0.6; }
+}
+.pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.count-up { animation: countUp 0.6s ease-out both; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,166,81,0); }
+  50%       { box-shadow: 0 0 0 8px rgba(0,166,81,0.15); }
+}
+.glow-pulse { animation: glowPulse 3s ease-in-out infinite; }
+
+/* ── Role bar animation ──────────────────────────── */
+.role-bar-fill {
+  animation: fillBar 1s ease-out both;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Pipeline ────────────────────────────────────── */
+.pipeline-track { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; }
+.pipeline-col { min-width: 240px; flex-shrink: 0; }
+
+/* ── Gradient bars in recharts ───────────────────── */
+.recharts-bar-rectangle:hover { filter: brightness(1.08); }
+
+/* ── Glassmorphism card ──────────────────────────── */
+.glass-card {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.9);
+}
+
+/* ── Chart tooltip ───────────────────────────────── */
+.chart-tooltip {
+  background: rgba(15,23,42,0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 12px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  min-width: 160px;
+}
