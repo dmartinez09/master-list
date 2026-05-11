@@ -39,6 +39,8 @@ export default function Portfolio() {
     ((location.state as { view?: ViewMode })?.view) ?? 'pipeline'
   );
   const [selected, setSelected] = useState<Iniciativa | null>(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const kanbanRef = useRef<HTMLDivElement>(null);
 
   // Apply navigation state when arriving with new filters
   useEffect(() => {
@@ -61,6 +63,18 @@ export default function Portfolio() {
     });
     return map;
   }, [filtered]);
+
+  // Show scroll hint when results exist but are hidden in far-right columns
+  useEffect(() => {
+    if (view !== 'pipeline') { setShowScrollHint(false); return; }
+    const firstFourEmpty = PIPELINE_ORDER.slice(0, 4).every(e => (byEstado[e] ?? []).length === 0);
+    if (filtered.length > 0 && firstFourEmpty) {
+      setShowScrollHint(true);
+      if (kanbanRef.current) kanbanRef.current.scrollLeft = 0;
+    } else {
+      setShowScrollHint(false);
+    }
+  }, [byEstado, view, filtered.length]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -102,7 +116,11 @@ export default function Portfolio() {
           </div>
 
           {/* Content */}
-          <div className={`flex-1 ${view === 'pipeline' ? 'overflow-hidden' : 'overflow-auto scrollbar-thin p-4'}`}>
+          <div
+            ref={kanbanRef}
+            onScroll={() => setShowScrollHint(false)}
+            className="flex-1 overflow-auto scrollbar-thin p-4"
+          >
             {view === 'pipeline' ? (
               <PipelineView byEstado={byEstado} onSelect={setSelected} />
             ) : (
@@ -113,84 +131,53 @@ export default function Portfolio() {
       </div>
 
       {selected && <InitiativeModal iniciativa={selected} onClose={() => setSelected(null)} />}
+
+      {/* Scroll hint arrow */}
+      {showScrollHint && view === 'pipeline' && (
+        <button
+          onClick={() => {
+            kanbanRef.current?.scrollBy({ left: 500, behavior: 'smooth' });
+          }}
+          className="fixed right-6 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-1.5 animate-pulse"
+          title="Ver resultados"
+        >
+          <div className="bg-red-500/60 hover:bg-red-500/80 transition-colors text-white rounded-full p-3 shadow-2xl">
+            <ChevronRight size={32} strokeWidth={2.5} />
+          </div>
+          <span className="text-[10px] font-bold text-red-600 bg-white/95 px-2 py-0.5 rounded-full shadow">
+            Ver resultados
+          </span>
+        </button>
+      )}
     </div>
   );
 }
 
 /* ── Pipeline / Kanban view ─────────────────────────────────────── */
 function PipelineView({ byEstado, onSelect }: { byEstado: Record<string, Iniciativa[]>; onSelect: (i: Iniciativa) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [showHint, setShowHint] = useState(false);
-
-  const totalItems = useMemo(
-    () => Object.values(byEstado).reduce((sum, arr) => sum + arr.length, 0),
-    [byEstado]
-  );
-
-  const firstColumnsEmpty = useMemo(
-    () => PIPELINE_ORDER.slice(0, 4).every(e => (byEstado[e] ?? []).length === 0),
-    [byEstado]
-  );
-
-  useEffect(() => {
-    if (totalItems > 0 && firstColumnsEmpty) {
-      setShowHint(true);
-      if (containerRef.current) containerRef.current.scrollLeft = 0;
-    } else {
-      setShowHint(false);
-    }
-  }, [byEstado, totalItems, firstColumnsEmpty]);
-
-  const handleScroll = () => { if (showHint) setShowHint(false); };
-
-  const scrollRight = () => {
-    containerRef.current?.scrollBy({ left: 480, behavior: 'smooth' });
-  };
-
   return (
-    <div className="relative h-full">
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        className="pipeline-track h-full overflow-x-auto p-4"
-      >
-        {PIPELINE_ORDER.map(estado => {
-          const cols = byEstado[estado] ?? [];
-          return (
-            <div key={estado} className="pipeline-col">
-              <div className="flex items-center gap-2 mb-3">
-                <EstadoBadge label={estado} />
-                <span className="text-xs text-gray-400 font-bold">{cols.length}</span>
-              </div>
-              <div className="space-y-2">
-                {cols.map(i => (
-                  <InitiativeCard key={i.id} iniciativa={i} onClick={onSelect} />
-                ))}
-                {cols.length === 0 && (
-                  <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-300">
-                    Sin iniciativas
-                  </div>
-                )}
-              </div>
+    <div className="pipeline-track">
+      {PIPELINE_ORDER.map(estado => {
+        const cols = byEstado[estado] ?? [];
+        return (
+          <div key={estado} className="pipeline-col">
+            <div className="flex items-center gap-2 mb-3">
+              <EstadoBadge label={estado} />
+              <span className="text-xs text-gray-400 font-bold">{cols.length}</span>
             </div>
-          );
-        })}
-      </div>
-
-      {showHint && (
-        <button
-          onClick={scrollRight}
-          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center gap-1.5 animate-pulse"
-          title="Ver resultados →"
-        >
-          <div className="bg-red-500/60 hover:bg-red-500/80 text-white rounded-full p-3 shadow-xl transition-colors">
-            <ChevronRight size={30} strokeWidth={2.5} />
+            <div className="space-y-2">
+              {cols.map(i => (
+                <InitiativeCard key={i.id} iniciativa={i} onClick={onSelect} />
+              ))}
+              {cols.length === 0 && (
+                <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-300">
+                  Sin iniciativas
+                </div>
+              )}
+            </div>
           </div>
-          <span className="text-[10px] font-semibold text-red-500/80 bg-white/90 px-2 py-0.5 rounded-full shadow">
-            Ver resultados
-          </span>
-        </button>
-      )}
+        );
+      })}
     </div>
   );
 }
