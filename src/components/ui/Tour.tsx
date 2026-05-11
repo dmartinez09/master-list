@@ -21,8 +21,13 @@ function TourEngine({ steps, storageKey, prerequisiteKey }: TourProps) {
   const [rect, setRect] = useState<Rect | null>(null);
 
   useEffect(() => {
-    if (prerequisiteKey && !localStorage.getItem(prerequisiteKey)) return;
-    if (!localStorage.getItem(storageKey)) setVisible(true);
+    const check = () => {
+      if (prerequisiteKey && !localStorage.getItem(prerequisiteKey)) return;
+      if (!localStorage.getItem(storageKey)) setVisible(true);
+    };
+    check();
+    window.addEventListener('tour:dismissed', check);
+    return () => window.removeEventListener('tour:dismissed', check);
   }, [storageKey, prerequisiteKey]);
 
   const updateRect = useCallback(() => {
@@ -60,6 +65,7 @@ function TourEngine({ steps, storageKey, prerequisiteKey }: TourProps) {
   const dismiss = () => {
     localStorage.setItem(storageKey, '1');
     setVisible(false);
+    window.dispatchEvent(new Event('tour:dismissed'));
   };
 
   const next = () => isLast ? dismiss() : setStep(s => s + 1);
