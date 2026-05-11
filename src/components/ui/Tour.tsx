@@ -172,11 +172,6 @@ function TourEngine({ steps, storageKey, prerequisiteKey }: TourProps) {
 /* ── Tour principal — menú de navegación ─────────────────────────── */
 const NAV_STEPS: Step[] = [
   {
-    selector: '',
-    title: 'Bienvenido a la Master List TA',
-    content: 'Esta es la fuente oficial del plan de Tecnologías Avanzadas de Grupo Point. A continuación te mostramos las secciones principales del menú de navegación.',
-  },
-  {
     selector: '[data-tour="nav-portafolio"]',
     title: 'Portafolio de Iniciativas',
     content: 'Explora y filtra las 174 iniciativas. Al entrar verás un tour específico que te explica los filtros y vistas disponibles.',
@@ -199,7 +194,7 @@ const NAV_STEPS: Step[] = [
 ];
 
 export function Tour() {
-  return <TourEngine steps={NAV_STEPS} storageKey="ta_tour_v2_done" />;
+  return <TourEngine steps={NAV_STEPS} storageKey="ta_tour_v3_done" />;
 }
 
 /* ── Tour de Portafolio — filtros y vistas ───────────────────────── */
@@ -222,5 +217,5 @@ const PORTFOLIO_STEPS: Step[] = [
 ];
 
 export function PortfolioTour() {
-  return <TourEngine steps={PORTFOLIO_STEPS} storageKey="ta_portfolio_tour_v2_done" prerequisiteKey="ta_tour_v2_done" />;
+  return <TourEngine steps={PORTFOLIO_STEPS} storageKey="ta_portfolio_tour_v2_done" prerequisiteKey="ta_tour_v3_done" />;
 }
