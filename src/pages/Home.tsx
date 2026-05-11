@@ -17,12 +17,12 @@ import { useCountUp } from '../hooks/useCountUp';
 const TOTAL = 174;
 
 const PIPELINE_STAGES = [
-  { label: 'Completadas',     count: 33,  color: '#00A651', textColor: '#fff', pct: 19, meaning: 'Entregadas y cerradas. Valor real en manos del área solicitante.' },
-  { label: 'En Ejecución',    count: 31,  color: '#2563eb', textColor: '#fff', pct: 18, meaning: 'Con avance medible: 0% → 25% → 50% → 75% → Aprobación Final.' },
-  { label: 'Próximas',        count: 20,  color: '#7c3aed', textColor: '#fff', pct: 11, meaning: 'Backlog refinado. Listas para arrancar al liberar capacidad.' },
-  { label: 'Pipeline',        count: 80,  color: '#e2e8f0', textColor: '#475569', pct: 46, meaning: 'Solicitadas o en validación. Demanda futura confirmada por el negocio.' },
-  { label: 'Bloqueadas',      count: 7,   color: '#dc2626', textColor: '#fff', pct: 4,  meaning: 'Necesitan decisión del C-Suite o aval de área. No es falta de capacidad TA.' },
-  { label: 'Fuera del Plan',  count: 3,   color: '#f1f5f9', textColor: '#94a3b8', pct: 2,  meaning: 'Descartadas o postergadas. Se revisarán en próximo ciclo.' },
+  { label: 'Completadas',     count: 33,  color: '#00A651', textColor: '#fff', pct: 19, meaning: 'Entregadas y cerradas. Valor real en manos del área solicitante.',    estados: ['Finalizado'] },
+  { label: 'En Ejecución',    count: 31,  color: '#2563eb', textColor: '#fff', pct: 18, meaning: 'Con avance medible: 0% → 25% → 50% → 75% → Aprobación Final.',       estados: ['En proceso 0% - 25%', 'En proceso 25% - 50%', 'En proceso 51% - 75%', 'En proceso 75% - +', 'Aprobación Final'] },
+  { label: 'Próximas',        count: 20,  color: '#7c3aed', textColor: '#fff', pct: 11, meaning: 'Backlog refinado. Listas para arrancar al liberar capacidad.',         estados: ['Próximo (Backlog listo)'] },
+  { label: 'Pipeline',        count: 80,  color: '#e2e8f0', textColor: '#475569', pct: 46, meaning: 'Solicitadas o en validación. Demanda futura confirmada por el negocio.', estados: ['Solicitado / A validar', 'En Espera de TI / TA'] },
+  { label: 'Bloqueadas',      count: 7,   color: '#dc2626', textColor: '#fff', pct: 4,  meaning: 'Necesitan decisión del C-Suite o aval de área. No es falta de capacidad TA.', estados: ['Bloqueado'] },
+  { label: 'Fuera del Plan',  count: 3,   color: '#f1f5f9', textColor: '#94a3b8', pct: 2,  meaning: 'Descartadas o postergadas. Se revisarán en próximo ciclo.',         estados: ['Fuera del Plan'] },
 ];
 
 const PRIO_MATRIX = {
@@ -57,6 +57,7 @@ const COUNTRY_DATA = [
 type CapItem = { id: string; titulo: string; estado: string; pais?: string };
 type Capacidad = {
   eje: string;
+  dimension: string;
   icon: any;
   color: string;
   light: string;
@@ -73,6 +74,7 @@ type Capacidad = {
 const CAPACIDADES: Capacidad[] = [
   {
     eje: 'Datos confiables y decisiones por evidencia',
+    dimension: 'Datos y Analítica',
     icon: Database,
     color: '#2563eb',
     light: '#eff6ff',
@@ -100,6 +102,7 @@ const CAPACIDADES: Capacidad[] = [
   },
   {
     eje: 'Operación digital end-to-end',
+    dimension: 'Aplicaciones e Infraestructura',
     icon: Zap,
     color: '#00A651',
     light: '#f0faf4',
@@ -127,6 +130,7 @@ const CAPACIDADES: Capacidad[] = [
   },
   {
     eje: 'IA aplicada al negocio con gobernanza',
+    dimension: 'Personas, IA e Innovación',
     icon: Brain,
     color: '#7c3aed',
     light: '#f5f3ff',
@@ -150,6 +154,7 @@ const CAPACIDADES: Capacidad[] = [
   },
   {
     eje: 'ERPs y sistemas core estabilizados',
+    dimension: 'Aplicaciones e Infraestructura',
     icon: Building2,
     color: '#0891b2',
     light: '#ecfeff',
@@ -175,6 +180,7 @@ const CAPACIDADES: Capacidad[] = [
   },
   {
     eje: 'Estructura, política y gobierno de TI',
+    dimension: 'Ciberseguridad y Gobierno',
     icon: Compass,
     color: '#d97706',
     light: '#fffbeb',
@@ -197,6 +203,7 @@ const CAPACIDADES: Capacidad[] = [
   },
   {
     eje: 'Seguridad, continuidad y experiencia',
+    dimension: 'Ciberseguridad y Gobierno',
     icon: Shield,
     color: '#dc2626',
     light: '#fef2f2',
@@ -412,7 +419,7 @@ function DeepCapabilityAnalysis() {
               Hallazgos que construyen esta capacidad ({cap.totalIniciativas})
             </p>
             <button
-              onClick={() => navigate('/portafolio')}
+              onClick={() => navigate('/portafolio', { state: { dimension: [cap.dimension] } })}
               className="text-[10px] text-brand-600 hover:text-brand-800 font-semibold flex items-center gap-1"
             >
               Ver todas <ArrowRight size={11} />
@@ -424,7 +431,7 @@ function DeepCapabilityAnalysis() {
               return (
                 <div
                   key={it.id}
-                  onClick={() => navigate('/portafolio')}
+                  onClick={() => navigate('/portafolio', { state: { search: it.id } })}
                   className="px-5 py-2.5 flex items-center gap-3 hover:bg-gray-50/60 cursor-pointer transition-colors"
                 >
                   <span className="text-[10px] font-mono font-bold text-gray-400 shrink-0 w-14">{it.id}</span>
@@ -465,7 +472,7 @@ function TangibleWinsGrid() {
         {TANGIBLE_WINS.map(w => (
           <div
             key={w.id}
-            onClick={() => navigate('/portafolio')}
+            onClick={() => navigate('/portafolio', { state: { search: w.id } })}
             className="cursor-pointer p-4 rounded-xl border border-gray-100 bg-white hover:border-brand-300 hover:shadow-md transition-all group"
           >
             <div className="flex items-start gap-3">
@@ -502,7 +509,7 @@ function ExecutiveFunnel() {
         const barPct = (stage.count / total) * 100;
         const isHot = hovered === stage.label;
         return (
-          <div key={stage.label} onMouseEnter={() => setHovered(stage.label)} onMouseLeave={() => setHovered(null)} onClick={() => navigate('/portafolio')} className="group cursor-pointer">
+          <div key={stage.label} onMouseEnter={() => setHovered(stage.label)} onMouseLeave={() => setHovered(null)} onClick={() => navigate('/portafolio', { state: { estado: stage.estados } })} className="group cursor-pointer">
             <div className="flex items-center gap-3">
               <div className="w-10 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0 transition-transform duration-150" style={{ backgroundColor: stage.color, color: stage.textColor, transform: isHot ? 'scale(1.1)' : 'scale(1)' }}>
                 {stage.count}
@@ -583,7 +590,7 @@ function PriorityMatrix() {
                     const intensity = pct / 100;
                     return (
                       <td key={col} className="py-2 px-2 text-center">
-                        <div onMouseEnter={() => setHovered(key)} onMouseLeave={() => setHovered(null)} onClick={() => navigate('/portafolio')} className="relative rounded-xl p-2.5 cursor-pointer transition-all duration-200 hover:scale-105"
+                        <div onMouseEnter={() => setHovered(key)} onMouseLeave={() => setHovered(null)} onClick={() => navigate('/portafolio', { state: { prioridad: [row.split(' ')[0]] } })} className="relative rounded-xl p-2.5 cursor-pointer transition-all duration-200 hover:scale-105"
                           style={{ backgroundColor: `color-mix(in srgb, ${c.active} ${Math.round(intensity * 30)}%, ${c.bg})`, border: hovered === key ? `2px solid ${c.active}` : '2px solid transparent', boxShadow: hovered === key ? `0 4px 12px ${c.active}33` : 'none' }}>
                           <div className="text-xl font-black" style={{ color: c.active }}>{val}</div>
                           <div className="text-[9px] font-medium" style={{ color: c.text }}>{pct}%</div>
@@ -692,7 +699,7 @@ function BlockedDecisions({ onNavigate }: { onNavigate: () => void }) {
           <ChevronRight size={11} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
         </button>
         <button onClick={onNavigate} className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 font-semibold">
-          Ver en portafolio <ArrowRight size={12} />
+          Ver hallazgos bloqueados <ArrowRight size={12} />
         </button>
       </div>
     </div>
@@ -797,7 +804,7 @@ export default function Home() {
         </ChartCard>
 
         {/* ── Bloqueadas ────────────────────────────────────────── */}
-        <BlockedDecisions onNavigate={() => navigate('/portafolio')} />
+        <BlockedDecisions onNavigate={() => navigate('/portafolio', { state: { estado: ['Bloqueado'] } })} />
 
       </div>
     </div>
