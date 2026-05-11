@@ -3,11 +3,11 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight } from 'lucide-react';
 
 const nav = [
-  { to: '/', icon: LayoutDashboard, label: 'Inicio' },
-  { to: '/portafolio', icon: Layers, label: 'Portafolio' },
-  { to: '/paises', icon: Globe, label: 'País / Área' },
-  { to: '/madurez', icon: BarChart2, label: 'Madurez' },
-  { to: '/ejecucion', icon: Activity, label: 'Ejecución' },
+  { to: '/', icon: LayoutDashboard, label: 'Inicio', tour: 'nav-inicio' },
+  { to: '/portafolio', icon: Layers, label: 'Portafolio', tour: 'nav-portafolio' },
+  { to: '/paises', icon: Globe, label: 'País / Área', tour: 'nav-paises' },
+  { to: '/madurez', icon: BarChart2, label: 'Madurez', tour: 'nav-madurez' },
+  { to: '/ejecucion', icon: Activity, label: 'Ejecución', tour: 'nav-ejecucion' },
 ];
 
 interface NavbarProps { breadcrumb?: string[] }
@@ -26,12 +26,13 @@ export function Navbar({ breadcrumb }: NavbarProps) {
         </div>
 
         {/* Nav */}
-        <nav className="flex items-center gap-1">
-          {nav.map(({ to, icon: Icon, label }) => (
+        <nav className="flex items-center gap-1" data-tour="navbar-nav">
+          {nav.map(({ to, icon: Icon, label, tour }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
+              data-tour={tour}
               className={({ isActive }) =>
                 `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive

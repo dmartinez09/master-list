@@ -4,11 +4,13 @@ import Portfolio from './pages/Portfolio';
 import Countries from './pages/Countries';
 import Maturity from './pages/Maturity';
 import Execution from './pages/Execution';
+import { Tour } from './components/ui/Tour';
 import './index.css';
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Tour />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/portafolio" element={<Portfolio />} />
