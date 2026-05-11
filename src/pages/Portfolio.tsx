@@ -53,6 +53,8 @@ export default function Portfolio() {
       setFilters({ ...EMPTY_FILTERS, ...s });
       if (s.view) setView(s.view);
     }
+    window.scrollTo(0, 0);
+    if (kanbanRef.current) kanbanRef.current.scrollTop = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);
 
