@@ -149,7 +149,16 @@ export default function Portfolio() {
       {showScrollHint && view === 'pipeline' && (
         <button
           onClick={() => {
-            getTrack()?.scrollBy({ left: 500, behavior: 'smooth' });
+            const track = getTrack();
+            if (!track) return;
+            const firstNonEmptyIdx = PIPELINE_ORDER.findIndex(e => (byEstado[e] ?? []).length > 0);
+            if (firstNonEmptyIdx < 0) return;
+            const cols = track.querySelectorAll<HTMLElement>('.pipeline-col');
+            const targetCol = cols[firstNonEmptyIdx];
+            if (targetCol) {
+              const scrollTo = targetCol.offsetLeft - (track.clientWidth / 2) + (targetCol.offsetWidth / 2);
+              track.scrollTo({ left: Math.max(0, scrollTo), behavior: 'smooth' });
+            }
           }}
           className="fixed right-6 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-1.5 animate-pulse"
           title="Ver resultados"
