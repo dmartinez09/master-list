@@ -12,16 +12,18 @@ interface Rect { top: number; left: number; width: number; height: number }
 interface TourProps {
   steps: Step[];
   storageKey: string;
+  prerequisiteKey?: string;
 }
 
-function TourEngine({ steps, storageKey }: TourProps) {
+function TourEngine({ steps, storageKey, prerequisiteKey }: TourProps) {
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
   const [rect, setRect] = useState<Rect | null>(null);
 
   useEffect(() => {
+    if (prerequisiteKey && !localStorage.getItem(prerequisiteKey)) return;
     if (!localStorage.getItem(storageKey)) setVisible(true);
-  }, [storageKey]);
+  }, [storageKey, prerequisiteKey]);
 
   const updateRect = useCallback(() => {
     if (!visible) return;
@@ -214,5 +216,5 @@ const PORTFOLIO_STEPS: Step[] = [
 ];
 
 export function PortfolioTour() {
-  return <TourEngine steps={PORTFOLIO_STEPS} storageKey="ta_portfolio_tour_v2_done" />;
+  return <TourEngine steps={PORTFOLIO_STEPS} storageKey="ta_portfolio_tour_v2_done" prerequisiteKey="ta_tour_v1_done" />;
 }
