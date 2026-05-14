@@ -268,15 +268,19 @@ function RichTooltip({ active, payload, label, hint }: any) {
   );
 }
 
-function AnimatedKpi({ value, label, sub, color = '#00A651', delay = 0, suffix = '' }:
-  { value: number; label: string; sub?: string; color?: string; delay?: number; suffix?: string }) {
+function AnimatedKpi({ value, label, sub, color = '#00A651', delay = 0, suffix = '', onClick }:
+  { value: number; label: string; sub?: string; color?: string; delay?: number; suffix?: string; onClick?: () => void }) {
   const v = useCountUp(value, 1400, delay);
+  const Comp: any = onClick ? 'button' : 'div';
   return (
-    <div className="flex flex-col items-center text-center p-4">
+    <Comp
+      onClick={onClick}
+      className={`flex flex-col items-center text-center p-4 w-full ${onClick ? 'cursor-pointer hover:bg-gray-50 transition-colors' : ''}`}
+    >
       <span className="text-4xl md:text-5xl font-black leading-none mb-1" style={{ color }}>{v}{suffix}</span>
       <span className="text-xs font-bold text-gray-700 mb-0.5">{label}</span>
       {sub && <span className="text-[10px] text-gray-400 leading-tight">{sub}</span>}
-    </div>
+    </Comp>
   );
 }
 
@@ -550,6 +554,14 @@ const CELL_COLORS = {
   'Bloqueada':    { bg: '#fef2f2', active: '#dc2626', text: '#7f1d1d' },
 };
 
+/* Mapeo de cada columna de la matriz a los estados reales del Master List */
+const COL_TO_ESTADOS: Record<string, string[]> = {
+  'Completada':   ['Finalizado'],
+  'En Ejecución': ['En proceso 0% - 25%', 'En proceso 25% - 50%', 'En proceso 51% - 75%', 'En proceso 75% - +', 'Aprobación Final'],
+  'Pendiente':    ['Solicitado / A validar', 'Próximo (Backlog listo)', 'En Espera de TI / TA', 'Fuera del Plan'],
+  'Bloqueada':    ['Bloqueado'],
+};
+
 function PriorityMatrix() {
   const [hovered, setHovered] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -559,6 +571,9 @@ function PriorityMatrix() {
         <p className="text-xs text-brand-900 font-medium leading-relaxed">
           De los <strong>68 hallazgos de Alta prioridad</strong>, ya hay <strong>19 cerrados</strong> y <strong>20 en ejecución</strong> (57%).
           Los <strong>4 bloqueados</strong> en alta dependen de decisiones fuera del área, no de capacidad ejecutora.
+        </p>
+        <p className="text-[10px] text-brand-700 mt-1.5 italic">
+          Clic en cualquier celda abre el Portafolio filtrado por prioridad + estado.
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -570,7 +585,13 @@ function PriorityMatrix() {
                 const c = CELL_COLORS[col as keyof typeof CELL_COLORS];
                 return (
                   <th key={col} className="text-center py-1.5 px-2">
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: c.bg, color: c.active }}>{col}</span>
+                    <button
+                      onClick={() => navigate('/portafolio', { state: { estado: COL_TO_ESTADOS[col], view: 'table' } })}
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full hover:scale-105 transition-transform cursor-pointer"
+                      style={{ backgroundColor: c.bg, color: c.active }}
+                    >
+                      {col}
+                    </button>
                   </th>
                 );
               })}
@@ -579,9 +600,18 @@ function PriorityMatrix() {
           <tbody>
             {PRIO_MATRIX.rows.map((row, ri) => {
               const prioColor = ri === 0 ? '#dc2626' : ri === 1 ? '#d97706' : '#64748b';
+              const prioName = row.split(' ')[0];
               return (
                 <tr key={row} className="border-t border-gray-50">
-                  <td className="py-2 pr-3 font-bold" style={{ color: prioColor }}>{row}</td>
+                  <td className="py-2 pr-3">
+                    <button
+                      onClick={() => navigate('/portafolio', { state: { prioridad: [prioName], view: 'table' } })}
+                      className="font-bold hover:underline cursor-pointer"
+                      style={{ color: prioColor }}
+                    >
+                      {row}
+                    </button>
+                  </td>
                   {PRIO_MATRIX.cols.map((col, ci) => {
                     const val = PRIO_MATRIX.data[ri][ci];
                     const pct = PRIO_MATRIX.pcts[ri][ci];
@@ -590,11 +620,27 @@ function PriorityMatrix() {
                     const intensity = pct / 100;
                     return (
                       <td key={col} className="py-2 px-2 text-center">
-                        <div onMouseEnter={() => setHovered(key)} onMouseLeave={() => setHovered(null)} onClick={() => navigate('/portafolio', { state: { prioridad: [row.split(' ')[0]] } })} className="relative rounded-xl p-2.5 cursor-pointer transition-all duration-200 hover:scale-105"
-                          style={{ backgroundColor: `color-mix(in srgb, ${c.active} ${Math.round(intensity * 30)}%, ${c.bg})`, border: hovered === key ? `2px solid ${c.active}` : '2px solid transparent', boxShadow: hovered === key ? `0 4px 12px ${c.active}33` : 'none' }}>
+                        <button
+                          onMouseEnter={() => setHovered(key)}
+                          onMouseLeave={() => setHovered(null)}
+                          onClick={() => navigate('/portafolio', {
+                            state: {
+                              prioridad: [prioName],
+                              estado: COL_TO_ESTADOS[col],
+                              view: 'table',
+                            },
+                          })}
+                          className="relative rounded-xl p-2.5 cursor-pointer transition-all duration-200 hover:scale-105 w-full"
+                          style={{
+                            backgroundColor: `color-mix(in srgb, ${c.active} ${Math.round(intensity * 30)}%, ${c.bg})`,
+                            border: hovered === key ? `2px solid ${c.active}` : '2px solid transparent',
+                            boxShadow: hovered === key ? `0 4px 12px ${c.active}33` : 'none',
+                          }}
+                          title={`${prioName} · ${col} → abrir ${val} hallazgo${val !== 1 ? 's' : ''} en el Portafolio`}
+                        >
                           <div className="text-xl font-black" style={{ color: c.active }}>{val}</div>
                           <div className="text-[9px] font-medium" style={{ color: c.text }}>{pct}%</div>
-                        </div>
+                        </button>
                       </td>
                     );
                   })}
@@ -612,6 +658,9 @@ function PriorityMatrix() {
    COUNTRY ACHIEVEMENT
 ═══════════════════════════════════════════════════════════════ */
 function CountryAchievement() {
+  const navigate = useNavigate();
+  const goCountry = (empresa: string) => navigate('/portafolio', { state: { empresa: [empresa] } });
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap gap-3">
@@ -628,16 +677,36 @@ function CountryAchievement() {
         ))}
       </div>
       <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={COUNTRY_DATA} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+        <BarChart
+          data={COUNTRY_DATA}
+          margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+          onClick={(e: any) => e?.activeLabel && goCountry(e.activeLabel)}
+          style={{ cursor: 'pointer' }}
+        >
           <XAxis dataKey="name" tick={{ fontSize: 10 }} />
           <YAxis tick={{ fontSize: 10 }} />
-          <RTooltip content={<RichTooltip hint="Clic para ver estas iniciativas" />} cursor={{ fill: 'rgba(0,166,81,0.06)' }} />
+          <RTooltip content={<RichTooltip hint="Clic en la barra para abrir el Portafolio de este país" />} cursor={{ fill: 'rgba(0,166,81,0.06)' }} />
           <Bar dataKey="completada" name="Completada" stackId="a" fill="#00A651" />
           <Bar dataKey="ejecucion"  name="En Ejecución" stackId="a" fill="#2563eb" />
           <Bar dataKey="pendiente"  name="Pendiente"  stackId="a" fill="#e2e8f0" />
           <Bar dataKey="bloqueada"  name="Bloqueada"  stackId="a" fill="#dc2626" radius={[4,4,0,0]} />
         </BarChart>
       </ResponsiveContainer>
+
+      {/* País shortcuts */}
+      <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-1.5">
+        {COUNTRY_DATA.map(c => (
+          <button
+            key={c.name}
+            onClick={() => goCountry(c.name)}
+            className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-gray-100 hover:border-brand-300 hover:bg-brand-50/40 transition-all group text-left"
+          >
+            <span className="text-[11px] font-semibold text-gray-700 truncate">{c.name}</span>
+            <ArrowRight size={11} className="text-gray-300 group-hover:text-brand-500 shrink-0" />
+          </button>
+        ))}
+      </div>
+
       <div className="mt-3 p-3 bg-gray-50 border border-gray-100 rounded-xl text-[11px] text-gray-700 leading-relaxed">
         <strong>Point Andina lidera la ejecución</strong> con 18 cerradas y 12 en marcha — modelo replicable.
         <strong> Ecuador (15)</strong> y <strong>Colombia (30)</strong> tienen alto pipeline pendiente — la próxima frontera del plan.
@@ -653,6 +722,7 @@ function BlockedDecisions({ onNavigate }: { onNavigate: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? BLOQUEADAS_REALES : BLOQUEADAS_REALES.slice(0, 4);
   const prioColor = (p: string) => p === 'Alta' ? '#dc2626' : p === 'Media' ? '#d97706' : '#64748b';
+  const navigate = useNavigate();
 
   return (
     <div className="bg-white border border-red-200 rounded-2xl overflow-hidden shadow-sm">
@@ -666,16 +736,27 @@ function BlockedDecisions({ onNavigate }: { onNavigate: () => void }) {
             </p>
           </div>
         </div>
+        <button
+          onClick={() => navigate('/portafolio', { state: { estado: ['Bloqueado'], view: 'table' } })}
+          className="hidden md:inline-flex items-center gap-1.5 text-xs bg-white/15 hover:bg-white/25 text-white font-semibold px-3 py-1.5 rounded-lg transition-colors"
+        >
+          Ver las 7 en el portafolio <ArrowRight size={11} />
+        </button>
       </div>
 
       <div className="divide-y divide-gray-50">
         {visible.map(b => (
-          <div key={b.id} className="px-5 py-3.5 hover:bg-red-50/30 transition-colors">
+          <div
+            key={b.id}
+            onClick={() => navigate('/portafolio', { state: { search: b.id } })}
+            className="px-5 py-3.5 hover:bg-red-50/40 transition-colors cursor-pointer group"
+            title={`Abrir ${b.id} en el Portafolio`}
+          >
             <div className="flex items-start gap-3 mb-2">
               <span className="text-[10px] font-mono font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded shrink-0 mt-0.5">{b.id}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <p className="text-xs font-bold text-gray-900">{b.titulo}</p>
+                  <p className="text-xs font-bold text-gray-900 group-hover:text-red-700 transition-colors">{b.titulo}</p>
                   <span className="text-[10px] text-gray-400">· {b.pais}</span>
                   <span className="text-[10px] font-bold" style={{ color: prioColor(b.prio) }}>· {b.prio}</span>
                 </div>
@@ -688,6 +769,7 @@ function BlockedDecisions({ onNavigate }: { onNavigate: () => void }) {
                 </div>
                 <p className="text-[10px] text-gray-400 mt-1">Depende de: <strong className="text-gray-600">{b.dependeDe}</strong></p>
               </div>
+              <ArrowRight size={13} className="text-gray-300 group-hover:text-red-500 shrink-0 mt-0.5 transition-colors" />
             </div>
           </div>
         ))}
@@ -746,11 +828,29 @@ export default function Home() {
       <section className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-8">
           <div className="grid grid-cols-2 md:grid-cols-5 divide-x divide-gray-100">
-            <AnimatedKpi value={174} label="Hallazgos totales" sub="7 países del Grupo" delay={0} />
-            <AnimatedKpi value={33} label="Ya entregadas" sub="Valor real comprobado" color="#00A651" delay={100} />
-            <AnimatedKpi value={31} label="En ejecución" sub="Avance medible" color="#2563eb" delay={200} />
-            <AnimatedKpi value={6}  label="Capacidades en construcción" sub="Ejes del plan TA/TI" color="#7c3aed" delay={300} />
-            <AnimatedKpi value={68} label="Alta prioridad" sub="Foco del año" color="#d97706" delay={400} />
+            <AnimatedKpi
+              value={174} label="Hallazgos totales" sub="7 países del Grupo" delay={0}
+              onClick={() => navigate('/portafolio')}
+            />
+            <AnimatedKpi
+              value={33} label="Ya entregadas" sub="Valor real comprobado" color="#00A651" delay={100}
+              onClick={() => navigate('/portafolio', { state: { estado: ['Finalizado'], view: 'table' } })}
+            />
+            <AnimatedKpi
+              value={31} label="En ejecución" sub="Avance medible" color="#2563eb" delay={200}
+              onClick={() => navigate('/portafolio', { state: { estado: ['En proceso 0% - 25%','En proceso 25% - 50%','En proceso 51% - 75%','En proceso 75% - +','Aprobación Final'], view: 'table' } })}
+            />
+            <AnimatedKpi
+              value={6}  label="Capacidades en construcción" sub="Ejes del plan TA/TI" color="#7c3aed" delay={300}
+              onClick={() => {
+                const el = document.getElementById('capacidades-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            />
+            <AnimatedKpi
+              value={68} label="Alta prioridad" sub="Foco del año" color="#d97706" delay={400}
+              onClick={() => navigate('/portafolio', { state: { prioridad: ['Alta'], view: 'table' } })}
+            />
           </div>
         </div>
       </section>
@@ -758,13 +858,15 @@ export default function Home() {
       <div className="max-w-6xl mx-auto w-full px-8 py-6 space-y-6">
 
         {/* ── Análisis profundo del Master List ─────────────────── */}
-        <ChartCard
-          title="Las 6 capacidades estratégicas que emergen del Master List"
-          subtitle="Lectura agregada de los 174 hallazgos. Cada eje muestra el estado de hoy, el próximo nivel concreto y las tareas reales en ejecución que lo construyen."
-          accent="linear-gradient(90deg, #2563eb, #7c3aed, #00A651)"
-        >
-          <DeepCapabilityAnalysis />
-        </ChartCard>
+        <div id="capacidades-section" className="scroll-mt-20">
+          <ChartCard
+            title="Las 6 capacidades estratégicas que emergen del Master List"
+            subtitle="Lectura agregada de los 174 hallazgos. Cada eje muestra el estado de hoy, el próximo nivel concreto y las tareas reales en ejecución que lo construyen."
+            accent="linear-gradient(90deg, #2563eb, #7c3aed, #00A651)"
+          >
+            <DeepCapabilityAnalysis />
+          </ChartCard>
+        </div>
 
         {/* ── Logros tangibles ──────────────────────────────────── */}
         <ChartCard
