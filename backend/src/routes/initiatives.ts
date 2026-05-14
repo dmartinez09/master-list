@@ -5,6 +5,32 @@ import { requireAdmin } from '../lib/auth.js';
 
 export const initiativesRouter = Router();
 
+/* ─── Cache en memoria de la lista completa ───────────────────
+   Cosmos cross-partition queries son lentas (~6s para 174 docs).
+   Cacheamos por 60s. Cualquier PATCH invalida el cache.
+─────────────────────────────────────────────────────────────── */
+const CACHE_TTL_MS = 60_000;
+let cachedList: { data: any[]; expiresAt: number } | null = null;
+
+function invalidateCache() {
+  cachedList = null;
+}
+
+async function getInitiativesCached(): Promise<any[]> {
+  const now = Date.now();
+  if (cachedList && cachedList.expiresAt > now) {
+    return cachedList.data;
+  }
+  const t0 = Date.now();
+  const { resources } = await initiativesContainer.items
+    .query('SELECT * FROM c')
+    .fetchAll();
+  const sorted = resources.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  cachedList = { data: sorted, expiresAt: now + CACHE_TTL_MS };
+  console.log(`   ✓ Cache poblado: ${sorted.length} hallazgos en ${Date.now() - t0}ms`);
+  return sorted;
+}
+
 /** Whitelist de campos editables (cualquier otro campo se ignora) */
 const EditableFields = z.object({
   titulo: z.string().min(3).max(500).optional(),
@@ -39,13 +65,11 @@ const EditableFields = z.object({
   nivelImpacto: z.string().max(80).optional(),
 });
 
-/** GET /api/initiatives — lista completa */
+/** GET /api/initiatives — lista completa (con cache 60s) */
 initiativesRouter.get('/', async (_req, res) => {
   try {
-    const { resources } = await initiativesContainer.items
-      .query('SELECT * FROM c ORDER BY c.id')
-      .fetchAll();
-    res.json(resources);
+    const data = await getInitiativesCached();
+    res.json(data);
   } catch (err: any) {
     console.error('GET /initiatives error:', err.message);
     res.status(500).json({ error: 'No se pudieron cargar los hallazgos', detail: err.message });
@@ -108,8 +132,9 @@ initiativesRouter.patch('/:id', requireAdmin, async (req, res) => {
       _updated_by: 'admin',
     };
 
-    // 3) Upsert
+    // 3) Upsert + invalidar cache
     const { resource } = await initiativesContainer.items.upsert(updated);
+    invalidateCache();
     res.json(resource);
   } catch (err: any) {
     console.error(`PATCH /initiatives/${id} error:`, err.message);
