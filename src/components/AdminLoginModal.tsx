@@ -86,17 +86,34 @@ export function AdminLoginModal({ open, onClose }: Props) {
                 placeholder="Ingresa la contraseña"
                 disabled={submitting}
                 autoComplete="current-password"
-                className="w-full px-3 py-2.5 pr-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
+                style={{
+                  fontFamily: showPassword
+                    ? 'inherit'
+                    : '"Inter", system-ui, -apple-system, sans-serif',
+                  letterSpacing: showPassword ? 'normal' : '0.35em',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: '#111827',
+                  caretColor: '#00A651',
+                }}
+                className="w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 disabled:opacity-50 bg-white"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(s => !s)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
                 tabIndex={-1}
+                title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
                 {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
+            {/* Indicador discreto del número de caracteres tipeados */}
+            {password.length > 0 && (
+              <p className="mt-1.5 text-[10px] text-gray-400 text-right">
+                {password.length} caracteres
+              </p>
+            )}
           </label>
 
           {error && (
