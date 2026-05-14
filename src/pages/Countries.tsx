@@ -250,7 +250,12 @@ export default function Countries() {
         </div>
       </div>
 
-      {modalInit && <InitiativeModal iniciativa={modalInit} onClose={() => setModalInit(null)} />}
+      {modalInit && (
+        <InitiativeModal
+          iniciativa={initiatives.find(i => i.id === modalInit.id) ?? modalInit}
+          onClose={() => setModalInit(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, MapPin, User, Clock, AlertTriangle, CheckCircle, Target, Zap,
-  Pencil, Save, Loader2, ShieldCheck,
+  Pencil, Save, Loader2, ShieldCheck, PlusCircle,
 } from 'lucide-react';
 import type { Iniciativa } from '../types';
 import { EstadoBadge, DimensionBadge, CostoBadge } from './ui/Badge';
@@ -11,9 +11,14 @@ import { FRAMEWORK_DIMENSIONS } from '../utils/framework';
 import { CommentsSection } from './CommentsSection';
 import { useAuth } from '../contexts/AuthContext';
 import { useInitiatives } from '../contexts/InitiativesContext';
-import { updateInitiative } from '../lib/api';
+import { updateInitiative, createInitiative } from '../lib/api';
 
-interface Props { iniciativa: Iniciativa; onClose: () => void; }
+interface Props {
+  iniciativa: Iniciativa;
+  onClose: () => void;
+  /** Cuando true, el modal arranca en modo creación con todos los campos vacíos y editables */
+  createMode?: boolean;
+}
 
 /* ───────────────────────────────────────────────────────────────
    Catálogos auxiliares
@@ -141,23 +146,24 @@ function EditSelect({
 /* ───────────────────────────────────────────────────────────────
    Modal principal
 ─────────────────────────────────────────────────────────────── */
-export function InitiativeModal({ iniciativa: i, onClose }: Props) {
+export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: Props) {
   const { isAdmin } = useAuth();
-  const { updateLocal } = useInitiatives();
+  const { updateLocal, addLocal } = useInitiatives();
 
-  const [edit, setEdit] = useState(false);
+  // En createMode siempre arranca en edit
+  const [edit, setEdit] = useState(createMode);
   const [draft, setDraft] = useState<Patch>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Reset state si cambia la iniciativa o se cierra
+  // Reset state si cambia la iniciativa
   useEffect(() => {
-    setEdit(false);
+    setEdit(createMode);
     setDraft({});
     setSaveError(null);
     setSaveSuccess(false);
-  }, [i.id]);
+  }, [i.id, createMode]);
 
   // ESC para cerrar (solo si no estás editando)
   useEffect(() => {
@@ -191,6 +197,35 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
   };
 
   const handleSave = async () => {
+    if (createMode) {
+      // Validar campos mínimos
+      const titulo = String(draft.titulo ?? '').trim();
+      const empresa = String(draft.empresa ?? '').trim();
+      if (titulo.length < 3) {
+        setSaveError('El título es obligatorio (mín. 3 caracteres)');
+        return;
+      }
+      if (!empresa) {
+        setSaveError('La empresa/país es obligatoria');
+        return;
+      }
+      setSaving(true);
+      setSaveError(null);
+      try {
+        const created = await createInitiative(draft);
+        addLocal(created);
+        setSaveSuccess(true);
+        setTimeout(() => {
+          onClose();
+        }, 1200);
+      } catch (err: any) {
+        setSaveError(err.message ?? 'No se pudo crear');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!hasChanges) {
       setEdit(false);
       return;
@@ -230,7 +265,13 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="text-xs font-mono font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded">{i.id}</span>
+                {createMode ? (
+                  <span className="flex items-center gap-1 text-xs font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                    <PlusCircle size={11} /> NUEVO HALLAZGO
+                  </span>
+                ) : (
+                  <span className="text-xs font-mono font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded">{i.id}</span>
+                )}
                 {edit ? (
                   <EditSelect field="estado" value={v('estado')} options={[...PIPELINE_ORDER]} edit draft={draft} onChange={setDraft} />
                 ) : (
@@ -271,14 +312,14 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
                 <>
                   <button
                     onClick={handleSave}
-                    disabled={saving || !hasChanges}
+                    disabled={saving || (!createMode && !hasChanges)}
                     className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-lg transition-colors"
                   >
-                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                    Guardar
+                    {saving ? <Loader2 size={12} className="animate-spin" /> : (createMode ? <PlusCircle size={12} /> : <Save size={12} />)}
+                    {createMode ? 'Crear' : 'Guardar'}
                   </button>
                   <button
-                    onClick={handleCancel}
+                    onClick={createMode ? onClose : handleCancel}
                     disabled={saving}
                     className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
                   >
@@ -331,7 +372,9 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
           {saveSuccess && (
             <div className="mt-3 flex items-start gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg fade-in">
               <ShieldCheck size={12} className="text-emerald-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-emerald-800 leading-relaxed">Cambios guardados correctamente en Cosmos DB.</p>
+              <p className="text-[11px] text-emerald-800 leading-relaxed">
+                {createMode ? '¡Hallazgo creado correctamente en Cosmos DB!' : 'Cambios guardados correctamente en Cosmos DB.'}
+              </p>
             </div>
           )}
         </div>

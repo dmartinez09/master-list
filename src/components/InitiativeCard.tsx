@@ -8,6 +8,17 @@ interface Props {
   onClick: (i: Iniciativa) => void;
 }
 
+/** Considera "anónimo" los solicitantes tipo "Recurso externo 18", "NA - ...", vacío, o solo número */
+function isAnonSolicitante(s: string | undefined | null): boolean {
+  if (!s) return true;
+  const v = s.trim();
+  if (!v) return true;
+  if (/^recurso\s+externo/i.test(v)) return true;
+  if (/^na\b/i.test(v)) return true;
+  if (/^\d+$/.test(v)) return true;
+  return false;
+}
+
 export function InitiativeCard({ iniciativa: i, onClick }: Props) {
   return (
     <div
@@ -31,7 +42,7 @@ export function InitiativeCard({ iniciativa: i, onClick }: Props) {
         <span className="truncate">{i.empresa}</span>
         {i.area && <><span>·</span><span className="truncate">{i.area}</span></>}
       </div>
-      {i.solicitante && (
+      {!isAnonSolicitante(i.solicitante) && (
         <div className="flex items-center gap-1 text-[10px] text-gray-400 mb-2.5">
           <User size={10} className="shrink-0" />
           <span className="truncate">{i.solicitante}</span>

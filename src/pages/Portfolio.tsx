@@ -15,7 +15,7 @@ import { applyFilters, EMPTY_FILTERS } from '../utils/filters';
 import { updateInitiative } from '../lib/api';
 import type { Filters, Iniciativa } from '../types';
 import { EstadoBadge } from '../components/ui/Badge';
-import { LayoutGrid, Table2, Download, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Settings2, X, GripVertical, Loader2, CheckCircle2 } from 'lucide-react';
+import { LayoutGrid, Table2, Download, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Settings2, X, GripVertical, Loader2, CheckCircle2, PlusCircle } from 'lucide-react';
 import { PortfolioTour } from '../components/ui/Tour';
 
 type ViewMode = 'pipeline' | 'table';
@@ -94,6 +94,7 @@ export default function Portfolio() {
     ((location.state as { view?: ViewMode })?.view) ?? 'pipeline'
   );
   const [selected, setSelected] = useState<Iniciativa | null>(null);
+  const [creating, setCreating] = useState(false);
   const [showScrollHint, setShowScrollHint] = useState(false);
   const kanbanRef = useRef<HTMLDivElement>(null);
 
@@ -252,6 +253,17 @@ export default function Portfolio() {
               <p className="text-xs text-gray-500">{filtered.length} de {initiatives.length} iniciativas</p>
             </div>
             <div className="flex items-center gap-2">
+              {/* Crear nuevo (solo admin) */}
+              {isAdmin && (
+                <button
+                  onClick={() => setCreating(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg transition-colors"
+                  title="Crear un nuevo hallazgo"
+                >
+                  <PlusCircle size={13} /> Nueva tarea
+                </button>
+              )}
+
               <button
                 onClick={() => exportCSV(filtered)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 font-medium"
@@ -331,7 +343,19 @@ export default function Portfolio() {
       </div>
 
       <PortfolioTour />
-      {selected && <InitiativeModal iniciativa={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <InitiativeModal
+          iniciativa={initiatives.find(i => i.id === selected.id) ?? selected}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {creating && (
+        <InitiativeModal
+          createMode
+          iniciativa={{ id: '', titulo: '', empresa: '', area: '', estado: 'Solicitado / A validar', prioridad: 'Media' } as Iniciativa}
+          onClose={() => setCreating(false)}
+        />
+      )}
 
       {/* Scroll hint arrow */}
       {showScrollHint && view === 'pipeline' && (

@@ -95,6 +95,15 @@ export async function updateInitiative(
   return { ...updated, frameworkDimension: mapToFramework(updated) };
 }
 
+/** Admin: crea un nuevo hallazgo (requiere token + titulo + empresa) */
+export async function createInitiative(payload: Partial<Iniciativa>): Promise<Iniciativa> {
+  const created = await http<Iniciativa>('/initiatives', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return { ...created, frameworkDimension: mapToFramework(created) };
+}
+
 /* ─── Comentarios ─────────────────────────────────────────── */
 
 export function fetchComments(initiativeId: string): Promise<Comentario[]> {

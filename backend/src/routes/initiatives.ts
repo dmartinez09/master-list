@@ -65,6 +65,54 @@ const EditableFields = z.object({
   nivelImpacto: z.string().max(80).optional(),
 });
 
+/** Generar próximo ID disponible (ID-001, ID-002, ...) */
+async function nextId(): Promise<string> {
+  const data = await getInitiativesCached();
+  let max = 0;
+  for (const d of data) {
+    const m = /^ID-(\d+)$/i.exec(d.id ?? '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `ID-${String(max + 1).padStart(3, '0')}`;
+}
+
+/** POST /api/initiatives — admin crea un nuevo hallazgo */
+initiativesRouter.post('/', requireAdmin, async (req, res) => {
+  // Reutilizamos el mismo whitelist + titulo y empresa obligatorios
+  const CreateSchema = EditableFields.extend({
+    titulo: z.string().min(3, 'Título obligatorio').max(500),
+    empresa: z.string().min(1, 'Empresa obligatoria').max(80),
+  });
+  const parsed = CreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Datos inválidos',
+      detail: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; '),
+    });
+  }
+
+  try {
+    const id = await nextId();
+    const now = new Date().toISOString();
+    const doc = {
+      id,
+      // Defaults razonables
+      estado: 'Solicitado / A validar',
+      prioridad: 'Media',
+      ...parsed.data,
+      _created_at: now,
+      _updated_at: now,
+      _updated_by: 'admin',
+    };
+    const { resource } = await initiativesContainer.items.create(doc);
+    invalidateCache();
+    res.status(201).json(resource);
+  } catch (err: any) {
+    console.error('POST /initiatives error:', err.message);
+    res.status(500).json({ error: 'No se pudo crear', detail: err.message });
+  }
+});
+
 /** GET /api/initiatives — lista completa (con cache 60s) */
 initiativesRouter.get('/', async (_req, res) => {
   try {
@@ -139,5 +187,28 @@ initiativesRouter.patch('/:id', requireAdmin, async (req, res) => {
   } catch (err: any) {
     console.error(`PATCH /initiatives/${id} error:`, err.message);
     res.status(500).json({ error: 'No se pudo actualizar', detail: err.message });
+  }
+});
+
+/** DELETE /api/initiatives/:id — admin elimina un hallazgo */
+initiativesRouter.delete('/:id', requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    // Verificar que existe (workaround SDK)
+    const { resources } = await initiativesContainer.items
+      .query({
+        query: 'SELECT * FROM c WHERE c.id = @id',
+        parameters: [{ name: '@id', value: id }],
+      })
+      .fetchAll();
+    if (!resources.length) return res.status(404).json({ error: 'Hallazgo no encontrado' });
+
+    await initiativesContainer.item(id, id).delete();
+    invalidateCache();
+    res.json({ ok: true, deletedId: id });
+  } catch (err: any) {
+    if (err.code === 404) return res.status(404).json({ error: 'Hallazgo no encontrado' });
+    console.error(`DELETE /initiatives/${id} error:`, err.message);
+    res.status(500).json({ error: 'No se pudo borrar', detail: err.message });
   }
 });

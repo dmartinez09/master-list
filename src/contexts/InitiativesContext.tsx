@@ -9,6 +9,8 @@ interface InitiativesContextValue {
   refetch: () => Promise<void>;
   /** Actualiza una iniciativa en el cache local (optimistic update tras PATCH del admin) */
   updateLocal: (id: string, patch: Partial<Iniciativa>) => void;
+  /** Inserta una nueva iniciativa al inicio del cache (tras POST exitoso) */
+  addLocal: (item: Iniciativa) => void;
 }
 
 const InitiativesContext = createContext<InitiativesContextValue | null>(null);
@@ -38,8 +40,21 @@ export function InitiativesProvider({ children }: { children: React.ReactNode })
     setInitiatives(prev => prev.map(i => (i.id === id ? { ...i, ...patch } : i)));
   }, []);
 
+  const addLocal = useCallback((item: Iniciativa) => {
+    setInitiatives(prev => {
+      // Si ya existe (por race condition), reemplazar
+      const idx = prev.findIndex(i => i.id === item.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = item;
+        return copy;
+      }
+      return [item, ...prev];
+    });
+  }, []);
+
   return (
-    <InitiativesContext.Provider value={{ initiatives, loading, error, refetch: load, updateLocal }}>
+    <InitiativesContext.Provider value={{ initiatives, loading, error, refetch: load, updateLocal, addLocal }}>
       {children}
     </InitiativesContext.Provider>
   );
