@@ -163,7 +163,7 @@ export default function Portfolio() {
     setHiddenCols(new Set());
   };
 
-  const filtered = useMemo(() => applyFilters(initiatives, filters), [filters]);
+  const filtered = useMemo(() => applyFilters(initiatives, filters), [initiatives, filters]);
 
   const byEstado = useMemo(() => {
     const map: Record<string, Iniciativa[]> = {};
