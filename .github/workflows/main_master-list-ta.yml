@@ -19,17 +19,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-          cache: 'npm'
 
-      # 1. Frontend
-      - name: Install frontend dependencies
+      # ─── Frontend ───────────────────────────────────────────
+      - name: Install frontend deps
         run: npm ci
 
       - name: Build frontend
         run: npm run build:frontend
 
-      # 2. Backend
-      - name: Install backend dependencies
+      # ─── Backend ────────────────────────────────────────────
+      - name: Install backend deps
         run: npm ci
         working-directory: backend
 
@@ -37,26 +36,41 @@ jobs:
         run: npm run build
         working-directory: backend
 
-      # 3. Combinar frontend + backend en backend/public + backend/dist
-      - name: Prepare deploy package
-        run: node scripts/prepare-deploy.js
+      # ─── Empaquetar todo en ./deploy ────────────────────────
+      - name: Build deploy package
+        run: |
+          set -e
+          rm -rf deploy
+          mkdir -p deploy
+          # Backend compilado
+          cp -r backend/dist deploy/dist
+          # Frontend bundle dentro de public/
+          cp -r dist deploy/public
+          # package.json minimal para arrancar
+          cp backend/package.json deploy/package.json
+          cp backend/package-lock.json deploy/package-lock.json
+          # Reescribir scripts para que start apunte a ./dist/server.js
+          # (mantiene engines y dependencies del backend)
+          echo "=== Contenido de deploy/ ==="
+          ls -la deploy/
+          echo ""
+          echo "=== deploy/dist/ ==="
+          ls deploy/dist/ | head -10
+          echo ""
+          echo "=== deploy/public/ ==="
+          ls deploy/public/ | head -10
 
-      # 4. Reducir node_modules del backend a solo producción (sin devDeps)
-      - name: Prune backend dev dependencies
-        run: npm prune --production
-        working-directory: backend
+      # ─── Solo deps de producción ────────────────────────────
+      - name: Install production deps in deploy
+        run: npm ci --omit=dev
+        working-directory: deploy
 
-      # 5. Subir solo lo necesario para correr en Azure
-      - name: Upload artifact for deployment job
+      - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: |
-            backend/dist
-            backend/public
-            backend/node_modules
-            backend/package.json
-            backend/package-lock.json
+          path: deploy
+          if-no-files-found: error
 
   deploy:
     runs-on: ubuntu-latest
@@ -69,7 +83,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-          path: deploy
+          path: ./
+
+      - name: List downloaded files
+        run: |
+          echo "=== Estructura recibida ==="
+          ls -la
+          echo ""
+          echo "=== dist/ ==="
+          ls dist/ | head -5
+          echo ""
+          echo "=== public/ ==="
+          ls public/ | head -5
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -77,4 +102,4 @@ jobs:
           app-name: 'master-list-ta'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
-          package: deploy/backend
+          package: .
