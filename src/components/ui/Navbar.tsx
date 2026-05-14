@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight, Lock, LogOut, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { AdminLoginModal } from '../AdminLoginModal';
 
 const nav = [
   { to: '/', icon: LayoutDashboard, label: 'Inicio', tour: 'nav-inicio' },
@@ -13,6 +15,9 @@ const nav = [
 interface NavbarProps { breadcrumb?: string[] }
 
 export function Navbar({ breadcrumb }: NavbarProps) {
+  const { isAdmin, logout } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
+
   return (
     <header className="bg-brand-900 text-white shadow-lg z-40 relative">
       <div className="flex items-center justify-between px-6 h-14">
@@ -47,7 +52,35 @@ export function Navbar({ breadcrumb }: NavbarProps) {
           ))}
         </nav>
 
-        <div className="text-xs text-brand-400">Master List TA v2.0</div>
+        {/* Admin button / state */}
+        <div className="flex items-center gap-3">
+          {isAdmin ? (
+            <div className="flex items-center gap-1.5">
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30">
+                <ShieldCheck size={12} className="text-emerald-300" />
+                <span className="text-[11px] font-semibold text-emerald-200">Admin</span>
+              </div>
+              <button
+                onClick={logout}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-brand-200 hover:bg-brand-800 hover:text-white transition-colors"
+                title="Cerrar sesión"
+              >
+                <LogOut size={12} />
+                <span className="hidden md:inline">Salir</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setLoginOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-200 hover:bg-brand-800 hover:text-white transition-colors border border-brand-700/50"
+              title="Iniciar sesión como administrador"
+            >
+              <Lock size={12} />
+              <span className="hidden sm:inline">Admin</span>
+            </button>
+          )}
+          <div className="text-xs text-brand-400 hidden lg:block">Master List TA v2.0</div>
+        </div>
       </div>
 
       {/* Breadcrumb */}
@@ -61,6 +94,9 @@ export function Navbar({ breadcrumb }: NavbarProps) {
           ))}
         </div>
       )}
+
+      {/* Login modal */}
+      <AdminLoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </header>
   );
 }

@@ -5,11 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:all": "concurrently -k -n FE,BE -c blue,green \"npm:dev\" \"npm:dev:backend\"",
     "build": "tsc -b && vite build",
+    "build:frontend": "tsc -b && vite build",
+    "build:backend": "cd backend && npm ci && npm run build",
+    "build:azure": "npm ci && npm run build:frontend && npm run build:backend && node scripts/prepare-deploy.js",
+    "start": "node backend/dist/server.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tailwindcss/vite": "^4.2.4",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",

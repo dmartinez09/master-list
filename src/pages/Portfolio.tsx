@@ -1,15 +1,21 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import {
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors, useDraggable, useDroppable,
+  type DragEndEvent, type DragStartEvent,
+} from '@dnd-kit/core';
 import { Navbar } from '../components/ui/Navbar';
 import { Sidebar } from '../components/ui/Sidebar';
 import { InitiativeCard } from '../components/InitiativeCard';
 import { InitiativeModal } from '../components/InitiativeModal';
-import { initiatives } from '../data/initiatives';
+import { useInitiatives } from '../contexts/InitiativesContext';
+import { useAuth } from '../contexts/AuthContext';
 import { PIPELINE_ORDER } from '../data/catalogs';
 import { applyFilters, EMPTY_FILTERS } from '../utils/filters';
+import { updateInitiative } from '../lib/api';
 import type { Filters, Iniciativa } from '../types';
 import { EstadoBadge } from '../components/ui/Badge';
-import { LayoutGrid, Table2, Download, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Settings2, X } from 'lucide-react';
+import { LayoutGrid, Table2, Download, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Settings2, X, GripVertical, Loader2, CheckCircle2 } from 'lucide-react';
 import { PortfolioTour } from '../components/ui/Tour';
 
 type ViewMode = 'pipeline' | 'table';
@@ -39,7 +45,46 @@ function loadHiddenCols(): Set<string> {
 }
 
 export default function Portfolio() {
+  const { initiatives, loading, error, refetch, updateLocal } = useInitiatives();
+  const { isAdmin } = useAuth();
   const location = useLocation();
+
+  // Toast de feedback al mover una tarjeta
+  const [moveStatus, setMoveStatus] = useState<{
+    state: 'saving' | 'ok' | 'error';
+    text: string;
+  } | null>(null);
+  const moveStatusTimer = useRef<number | null>(null);
+
+  const showStatus = (state: 'saving' | 'ok' | 'error', text: string, autoHideMs = 2500) => {
+    if (moveStatusTimer.current) window.clearTimeout(moveStatusTimer.current);
+    setMoveStatus({ state, text });
+    if (autoHideMs > 0) {
+      moveStatusTimer.current = window.setTimeout(() => setMoveStatus(null), autoHideMs);
+    }
+  };
+
+  /** Llamado cuando se suelta una tarjeta en una columna distinta */
+  const handleMoveCard = async (iniciativa: Iniciativa, targetEstado: string) => {
+    if (iniciativa.estado === targetEstado) return;
+    const previousEstado = iniciativa.estado;
+
+    // 1) Optimistic: actualizar cache local inmediatamente
+    updateLocal(iniciativa.id, { estado: targetEstado as Iniciativa['estado'] });
+    showStatus('saving', `Moviendo ${iniciativa.id} a "${targetEstado}"...`, 0);
+
+    // 2) Llamar al backend
+    try {
+      const updated = await updateInitiative(iniciativa.id, { estado: targetEstado as Iniciativa['estado'] });
+      updateLocal(iniciativa.id, updated);
+      showStatus('ok', `${iniciativa.id} → ${targetEstado}`);
+    } catch (err: any) {
+      // 3) Rollback en error
+      updateLocal(iniciativa.id, { estado: previousEstado as Iniciativa['estado'] });
+      showStatus('error', `Error al mover ${iniciativa.id}: ${err.message ?? 'desconocido'}`, 5000);
+    }
+  };
+
   const initialFilters: Filters = {
     ...EMPTY_FILTERS,
     ...((location.state as Partial<Filters>) ?? {}),
@@ -153,6 +198,43 @@ export default function Portfolio() {
     return () => track.removeEventListener('scroll', hide);
   }, [showScrollHint]);
 
+  if (loading && initiatives.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar breadcrumb={['Inicio', 'Portafolio de Iniciativas']} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin mb-3" />
+            <p className="text-sm text-gray-500">Cargando hallazgos desde Azure Cosmos DB...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && initiatives.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar breadcrumb={['Inicio', 'Portafolio de Iniciativas']} />
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-8 max-w-md text-center">
+            <p className="text-sm font-bold text-red-700 mb-1">No se pudieron cargar los hallazgos</p>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">{error}</p>
+            <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
+              Verifica que el backend esté corriendo en <code className="text-gray-600">localhost:4000</code> (npm run dev en /backend).
+            </p>
+            <button
+              onClick={refetch}
+              className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              Reintentar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar breadcrumb={['Inicio', 'Portafolio de Iniciativas']} />
@@ -238,6 +320,8 @@ export default function Portfolio() {
                 colOrder={colOrder}
                 hiddenCols={hiddenCols}
                 onMoveCol={moveCol}
+                isAdmin={isAdmin}
+                onMoveCard={handleMoveCard}
               />
             ) : (
               <TableView data={filtered} onSelect={setSelected} />
@@ -275,6 +359,22 @@ export default function Portfolio() {
             Ver resultados
           </span>
         </button>
+      )}
+
+      {/* Toast de feedback al mover cards */}
+      {moveStatus && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-2xl fade-in text-xs font-semibold ${
+            moveStatus.state === 'saving' ? 'bg-gray-900 text-white' :
+            moveStatus.state === 'ok' ? 'bg-emerald-600 text-white' :
+            'bg-red-600 text-white'
+          }`}
+        >
+          {moveStatus.state === 'saving' && <Loader2 size={13} className="animate-spin" />}
+          {moveStatus.state === 'ok' && <CheckCircle2 size={13} />}
+          {moveStatus.state === 'error' && <X size={13} />}
+          <span>{moveStatus.text}</span>
+        </div>
       )}
     </div>
   );
@@ -351,61 +451,167 @@ function ColumnManager({
   );
 }
 
-/* ── Pipeline / Kanban view ─────────────────────────────────────── */
+/* ── Pipeline / Kanban view (con drag-and-drop si admin) ─────────── */
 function PipelineView({
-  byEstado, onSelect, colOrder, hiddenCols, onMoveCol,
+  byEstado, onSelect, colOrder, hiddenCols, onMoveCol, isAdmin, onMoveCard,
 }: {
   byEstado: Record<string, Iniciativa[]>;
   onSelect: (i: Iniciativa) => void;
   colOrder: string[];
   hiddenCols: Set<string>;
   onMoveCol: (colName: string, dir: -1 | 1) => void;
+  isAdmin: boolean;
+  onMoveCard: (iniciativa: Iniciativa, targetEstado: string) => void;
 }) {
   const visible = colOrder.filter(e => !hiddenCols.has(e));
 
-  return (
+  const [draggedItem, setDraggedItem] = useState<Iniciativa | null>(null);
+
+  // Sensor con activación por distancia — distingue click (abrir modal) de drag
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+  );
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const item = (e.active.data.current as { iniciativa?: Iniciativa })?.iniciativa ?? null;
+    setDraggedItem(item);
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setDraggedItem(null);
+    if (!e.over) return;
+    const targetEstado = String(e.over.id);
+    const item = (e.active.data.current as { iniciativa?: Iniciativa })?.iniciativa;
+    if (item && item.estado !== targetEstado) {
+      onMoveCard(item, targetEstado);
+    }
+  };
+
+  const trackContent = (
     <div className="pipeline-track">
       {visible.map((estado, idx) => {
         const cols = byEstado[estado] ?? [];
         const isFirst = idx === 0;
         const isLast = idx === visible.length - 1;
         return (
-          <div key={estado} className="pipeline-col">
-            <div className="flex items-center gap-1.5 mb-3">
-              <EstadoBadge label={estado} />
-              <span className="text-xs text-gray-400 font-bold">{cols.length}</span>
-              <div className="ml-auto flex items-center gap-0">
-                <button
-                  onClick={() => onMoveCol(estado, -1)}
-                  disabled={isFirst}
-                  className="p-0.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors rounded"
-                  title="Mover a la izquierda"
-                >
-                  <ChevronLeft size={13} />
-                </button>
-                <button
-                  onClick={() => onMoveCol(estado, 1)}
-                  disabled={isLast}
-                  className="p-0.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors rounded"
-                  title="Mover a la derecha"
-                >
-                  <ChevronRight size={13} />
-                </button>
+          <DroppableColumn
+            key={estado}
+            estado={estado}
+            count={cols.length}
+            isFirst={isFirst}
+            isLast={isLast}
+            onMoveCol={onMoveCol}
+            isAdmin={isAdmin}
+          >
+            {cols.map(i => (
+              isAdmin
+                ? <DraggableCard key={i.id} iniciativa={i} onSelect={onSelect} />
+                : <InitiativeCard key={i.id} iniciativa={i} onClick={onSelect} />
+            ))}
+            {cols.length === 0 && (
+              <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-300">
+                Sin iniciativas
               </div>
-            </div>
-            <div className="space-y-2">
-              {cols.map(i => (
-                <InitiativeCard key={i.id} iniciativa={i} onClick={onSelect} />
-              ))}
-              {cols.length === 0 && (
-                <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-300">
-                  Sin iniciativas
-                </div>
-              )}
-            </div>
-          </div>
+            )}
+          </DroppableColumn>
         );
       })}
+    </div>
+  );
+
+  if (!isAdmin) return trackContent;
+
+  return (
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      {trackContent}
+      <DragOverlay dropAnimation={null}>
+        {draggedItem && (
+          <div className="rotate-2 opacity-95 shadow-2xl cursor-grabbing">
+            <InitiativeCard iniciativa={draggedItem} onClick={() => { /* noop */ }} />
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+/* ── Droppable column ───────────────────────────────────────────── */
+function DroppableColumn({
+  estado, count, isFirst, isLast, onMoveCol, isAdmin, children,
+}: {
+  estado: string;
+  count: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onMoveCol: (col: string, dir: -1 | 1) => void;
+  isAdmin: boolean;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: estado, disabled: !isAdmin });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`pipeline-col transition-all ${isOver ? 'bg-brand-50/60 ring-2 ring-brand-400/40 rounded-xl' : ''}`}
+    >
+      <div className="flex items-center gap-1.5 mb-3">
+        <EstadoBadge label={estado} />
+        <span className="text-xs text-gray-400 font-bold">{count}</span>
+        <div className="ml-auto flex items-center gap-0">
+          <button
+            onClick={() => onMoveCol(estado, -1)}
+            disabled={isFirst}
+            className="p-0.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors rounded"
+            title="Mover columna a la izquierda"
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <button
+            onClick={() => onMoveCol(estado, 1)}
+            disabled={isLast}
+            className="p-0.5 text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors rounded"
+            title="Mover columna a la derecha"
+          >
+            <ChevronRight size={13} />
+          </button>
+        </div>
+      </div>
+      <div className="space-y-2 min-h-[40px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ── Draggable card wrapper (solo admin) ────────────────────────── */
+function DraggableCard({
+  iniciativa, onSelect,
+}: {
+  iniciativa: Iniciativa;
+  onSelect: (i: Iniciativa) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: iniciativa.id,
+    data: { iniciativa },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{ opacity: isDragging ? 0.3 : 1 }}
+      className="relative group cursor-grab active:cursor-grabbing"
+      title="Arrastra para mover · clic para abrir"
+    >
+      {/* Indicador visual al hover */}
+      <div className="absolute top-1.5 right-1.5 z-10 opacity-0 group-hover:opacity-70 transition-opacity bg-gray-900/70 text-white p-0.5 rounded pointer-events-none">
+        <GripVertical size={10} />
+      </div>
+      {/* InitiativeCard tiene su propio onClick. PointerSensor con distance=6
+          deja pasar clicks (sin movimiento) y captura drags (con movimiento > 6px) */}
+      <InitiativeCard iniciativa={iniciativa} onClick={onSelect} />
     </div>
   );
 }

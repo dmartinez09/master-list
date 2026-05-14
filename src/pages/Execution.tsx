@@ -8,7 +8,7 @@ import {
   Filter, Trophy, Layers, Target, Zap, MapPin,
 } from 'lucide-react';
 import { Navbar } from '../components/ui/Navbar';
-import { initiatives } from '../data/initiatives';
+import { useInitiatives } from '../contexts/InitiativesContext';
 import { ESTADOS, PIPELINE_ORDER } from '../data/catalogs';
 import { useCountUp } from '../hooks/useCountUp';
 import type { Iniciativa } from '../types';
@@ -211,6 +211,7 @@ function ProgressDetail({ buckets, navigate }: { buckets: EstadoBucket[]; naviga
    CHART 3 — PRIORITIZATION FLOW (cómo se priorizan)
 ═══════════════════════════════════════════════════════════════ */
 function PrioritizationMatrix({ navigate }: { navigate: (filters: { prioridad?: string[]; estado?: string[] }) => void }) {
+  const { initiatives } = useInitiatives();
   const matrix = useMemo(() => {
     const PRIO = ['Alta', 'Media', 'Baja'];
     const COLS: Array<{ name: string; estados: string[]; color: string }> = [
@@ -236,7 +237,7 @@ function PrioritizationMatrix({ navigate }: { navigate: (filters: { prioridad?: 
       });
       return { prio: p, total: rowTotal, cells };
     });
-  }, []);
+  }, [initiatives]);
 
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -305,6 +306,7 @@ function PrioritizationMatrix({ navigate }: { navigate: (filters: { prioridad?: 
    CHART 4 — VELOCITY POR PAÍS
 ═══════════════════════════════════════════════════════════════ */
 function CountryVelocity({ navigate }: { navigate: (empresa: string) => void }) {
+  const { initiatives } = useInitiatives();
   const data = useMemo(() => {
     const map: Record<string, { total: number; finalizado: number; ejecucion: number; pendiente: number; bloqueado: number }> = {};
     initiatives.forEach(i => {
@@ -323,7 +325,7 @@ function CountryVelocity({ navigate }: { navigate: (empresa: string) => void }) 
         cumplimiento: v.total > 0 ? Math.round(((v.finalizado + v.ejecucion) / v.total) * 100) : 0,
       }))
       .sort((a, b) => b.total - a.total);
-  }, []);
+  }, [initiatives]);
 
   return (
     <div>
@@ -480,6 +482,7 @@ function ImpactGrid({ navigate }: { navigate: () => void }) {
 ═══════════════════════════════════════════════════════════════ */
 export default function Execution() {
   const navigate = useNavigate();
+  const { initiatives, loading } = useInitiatives();
 
   // Compute estado buckets from real data
   const estadoBuckets: EstadoBucket[] = useMemo(() => {
@@ -500,7 +503,7 @@ export default function Execution() {
         group: meta?.group ?? 'pendiente',
       };
     });
-  }, []);
+  }, [initiatives]);
 
   const finalizadas = estadoBuckets.find(b => b.estado === 'Finalizado')?.count ?? 0;
   const enEjecucion = estadoBuckets.filter(b => b.group === 'progreso').reduce((s, b) => s + b.count, 0);
@@ -515,8 +518,19 @@ export default function Execution() {
         return order.indexOf(a.estado) - order.indexOf(b.estado);
       })
       .slice(0, 12),
-    []
+    [initiatives]
   );
+
+  if (loading && initiatives.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar breadcrumb={['Inicio', 'Cómo Trabajamos · Ejecución']} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="inline-block w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   // Helpers de navegación con filtros
   const goPortfolio = (filters: Partial<{ estado: string[]; prioridad: string[]; empresa: string[]; view: 'pipeline' | 'table' }>) => {

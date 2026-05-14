@@ -15,21 +15,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '22.x'
+          cache: 'npm'
 
-      - name: Install and build
-        run: |
-          npm install
-          npm run build
+      # 1. Frontend
+      - name: Install frontend dependencies
+        run: npm ci
 
+      - name: Build frontend
+        run: npm run build:frontend
+
+      # 2. Backend
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Build backend
+        run: npm run build
+        working-directory: backend
+
+      # 3. Combinar frontend + backend en backend/public + backend/dist
+      - name: Prepare deploy package
+        run: node scripts/prepare-deploy.js
+
+      # 4. Reducir node_modules del backend a solo producción (sin devDeps)
+      - name: Prune backend dev dependencies
+        run: npm prune --production
+        working-directory: backend
+
+      # 5. Subir solo lo necesario para correr en Azure
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: dist
+          path: |
+            backend/dist
+            backend/public
+            backend/node_modules
+            backend/package.json
+            backend/package-lock.json
 
   deploy:
     runs-on: ubuntu-latest
@@ -42,6 +69,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
+          path: deploy
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -49,4 +77,4 @@ jobs:
           app-name: 'master-list-ta'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
-          package: .
+          package: deploy/backend

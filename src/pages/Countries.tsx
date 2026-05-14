@@ -5,12 +5,10 @@ import {
 import { Navbar } from '../components/ui/Navbar';
 import { InitiativeCard } from '../components/InitiativeCard';
 import { InitiativeModal } from '../components/InitiativeModal';
-import { initiatives } from '../data/initiatives';
+import { useInitiatives } from '../contexts/InitiativesContext';
 import { FRAMEWORK_DIMENSIONS } from '../utils/framework';
 import type { Iniciativa } from '../types';
 
-const EMPRESAS = [...new Set(initiatives.map(i => i.empresa.trim()))].sort();
-const AREAS = [...new Set(initiatives.map(i => i.area.trim()).filter(Boolean))].sort();
 const PRIO_ORDER = ['Alta', 'Media', 'Baja'];
 
 function ChartTooltip({ active, payload, label }: any) {
@@ -43,15 +41,19 @@ function HeatmapCell({ count, max, color }: { count: number; max: number; color:
 }
 
 export default function Countries() {
+  const { initiatives, loading } = useInitiatives();
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>('');
   const [selectedArea, setSelectedArea] = useState<string>('');
   const [modalInit, setModalInit] = useState<Iniciativa | null>(null);
+
+  const EMPRESAS = useMemo(() => [...new Set(initiatives.map(i => i.empresa.trim()))].sort(), [initiatives]);
+  const AREAS = useMemo(() => [...new Set(initiatives.map(i => i.area.trim()).filter(Boolean))].sort(), [initiatives]);
 
   const filtered = useMemo(() =>
     initiatives.filter(i =>
       (!selectedEmpresa || i.empresa.trim() === selectedEmpresa) &&
       (!selectedArea || i.area.trim() === selectedArea)
-    ), [selectedEmpresa, selectedArea]
+    ), [initiatives, selectedEmpresa, selectedArea]
   );
 
   // Distribution by framework dimension
@@ -72,9 +74,10 @@ export default function Countries() {
   }, [filtered]);
 
   // Heatmap: área vs framework dimension
-  const heatmapAreas = selectedEmpresa
+  const heatmapAreas = useMemo(() => selectedEmpresa
     ? [...new Set(filtered.map(i => i.area.trim()).filter(Boolean))].sort()
-    : AREAS;
+    : AREAS,
+  [selectedEmpresa, filtered, AREAS]);
 
   const heatmap = useMemo(() => {
     const map: Record<string, Record<string, number>> = {};
@@ -90,7 +93,7 @@ export default function Countries() {
         if (map[a] && d) map[a][d] = (map[a][d] ?? 0) + 1;
       });
     return map;
-  }, [selectedEmpresa, heatmapAreas]);
+  }, [initiatives, selectedEmpresa, heatmapAreas]);
 
   const heatmapMax = useMemo(() => {
     let max = 0;
@@ -105,6 +108,17 @@ export default function Countries() {
       return pa - pb;
     }), [filtered]
   );
+
+  if (loading && initiatives.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar breadcrumb={['Inicio', 'Visión por País y Área']} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="inline-block w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

@@ -1,13 +1,31 @@
-import React from 'react';
-import { X, MapPin, User, Clock, DollarSign, AlertTriangle, CheckCircle, Target, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  X, MapPin, User, Clock, AlertTriangle, CheckCircle, Target, Zap,
+  Pencil, Save, Loader2, ShieldCheck,
+} from 'lucide-react';
 import type { Iniciativa } from '../types';
 import { EstadoBadge, DimensionBadge, CostoBadge } from './ui/Badge';
 import { Tooltip } from './ui/Tooltip';
-import { ESTADOS, NIVELES_MADUREZ } from '../data/catalogs';
+import { ESTADOS, NIVELES_MADUREZ, PIPELINE_ORDER } from '../data/catalogs';
 import { FRAMEWORK_DIMENSIONS } from '../utils/framework';
+import { CommentsSection } from './CommentsSection';
+import { useAuth } from '../contexts/AuthContext';
+import { useInitiatives } from '../contexts/InitiativesContext';
+import { updateInitiative } from '../lib/api';
 
 interface Props { iniciativa: Iniciativa; onClose: () => void; }
 
+/* ───────────────────────────────────────────────────────────────
+   Catálogos auxiliares
+─────────────────────────────────────────────────────────────── */
+const PRIORIDADES = ['Alta', 'Media', 'Baja'];
+const COMPLEJIDADES = ['Alta', 'Media', 'Baja'];
+const COSTOS = ['$0k', '<$5k', '$5–10k', '>$10k'];
+const TIPOS = ['Iniciativa corporativa', 'Proyecto', 'Tarea'];
+
+/* ───────────────────────────────────────────────────────────────
+   Helpers
+─────────────────────────────────────────────────────────────── */
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div className="mb-6">
@@ -36,7 +54,7 @@ function BulletText({ text }: { text: string }) {
   if (!text) return null;
   const bullets = text.split(/[•\n]/).map(s => s.trim()).filter(s => s.length > 10);
   if (bullets.length <= 1) {
-    return <p className="text-sm text-gray-700 leading-relaxed">{text}</p>;
+    return <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{text}</p>;
   }
   return (
     <ul className="space-y-2">
@@ -50,7 +68,106 @@ function BulletText({ text }: { text: string }) {
   );
 }
 
+/* ───────────────────────────────────────────────────────────────
+   Editable field components — solo se ven en modo edición
+─────────────────────────────────────────────────────────────── */
+type Patch = Partial<Iniciativa>;
+
+function EditField({
+  label, field, value, type = 'text', edit, draft, onChange, placeholder,
+}: {
+  label?: string;
+  field: keyof Iniciativa;
+  value: string;
+  type?: 'text' | 'textarea';
+  edit: boolean;
+  draft: Patch;
+  onChange: (patch: Patch) => void;
+  placeholder?: string;
+}) {
+  const current = (draft[field] as string) ?? value ?? '';
+  if (!edit) return <>{type === 'textarea' ? <BulletText text={value} /> : <span>{value}</span>}</>;
+
+  const handle = (v: string) => onChange({ ...draft, [field]: v });
+
+  return (
+    <div>
+      {label && <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">{label}</label>}
+      {type === 'textarea' ? (
+        <textarea
+          value={current}
+          onChange={e => handle(e.target.value)}
+          placeholder={placeholder}
+          rows={4}
+          className="w-full px-3 py-2 text-sm border border-amber-300 bg-amber-50/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 resize-y"
+        />
+      ) : (
+        <input
+          type="text"
+          value={current}
+          onChange={e => handle(e.target.value)}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 text-sm border border-amber-300 bg-amber-50/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+        />
+      )}
+    </div>
+  );
+}
+
+function EditSelect({
+  field, value, options, edit, draft, onChange,
+}: {
+  field: keyof Iniciativa;
+  value: string;
+  options: string[];
+  edit: boolean;
+  draft: Patch;
+  onChange: (patch: Patch) => void;
+}) {
+  const current = (draft[field] as string) ?? value ?? '';
+  if (!edit) return <>{value}</>;
+  return (
+    <select
+      value={current}
+      onChange={e => onChange({ ...draft, [field]: e.target.value })}
+      className="px-2 py-1 text-xs border border-amber-300 bg-amber-50/30 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
+    >
+      {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+      {value && !options.includes(value) && <option value={value}>{value}</option>}
+    </select>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Modal principal
+─────────────────────────────────────────────────────────────── */
 export function InitiativeModal({ iniciativa: i, onClose }: Props) {
+  const { isAdmin } = useAuth();
+  const { updateLocal } = useInitiatives();
+
+  const [edit, setEdit] = useState(false);
+  const [draft, setDraft] = useState<Patch>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Reset state si cambia la iniciativa o se cierra
+  useEffect(() => {
+    setEdit(false);
+    setDraft({});
+    setSaveError(null);
+    setSaveSuccess(false);
+  }, [i.id]);
+
+  // ESC para cerrar (solo si no estás editando)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !edit) onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [edit, onClose]);
+
   const fwName = i.frameworkDimension ?? '';
   const fwDef = FRAMEWORK_DIMENSIONS.find(d => d.name === fwName);
   const estadoDef = ESTADOS.find(e => e.estado === i.estado);
@@ -62,10 +179,44 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
     'En proceso 75% - +': 82, 'En proceso 51% - 75%': 62,
     'En proceso 25% - 50%': 37, 'En proceso 0% - 25%': 12,
   };
-  const avancePct = pctMap[i.estado] ?? 0;
+  const currentEstado = (draft.estado as string) ?? i.estado;
+  const avancePct = pctMap[currentEstado] ?? 0;
+
+  const hasChanges = Object.keys(draft).length > 0;
+
+  const handleCancel = () => {
+    setEdit(false);
+    setDraft({});
+    setSaveError(null);
+  };
+
+  const handleSave = async () => {
+    if (!hasChanges) {
+      setEdit(false);
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await updateInitiative(i.id, draft);
+      updateLocal(i.id, updated);
+      setEdit(false);
+      setDraft({});
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      setSaveError(err.message ?? 'No se pudo guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Para mostrar valor "actual" (draft sobrescribe el original)
+  const v = (field: keyof Iniciativa): string =>
+    ((draft[field] as string) ?? (i[field] as string) ?? '') as string;
 
   return (
-    <div className="fixed inset-0 z-50 flex" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex" onClick={!edit ? onClose : undefined}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
@@ -78,24 +229,71 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
         <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-6 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-xs font-mono font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded">{i.id}</span>
-                <EstadoBadge label={i.estado} />
+                {edit ? (
+                  <EditSelect field="estado" value={v('estado')} options={[...PIPELINE_ORDER]} edit draft={draft} onChange={setDraft} />
+                ) : (
+                  <EstadoBadge label={i.estado} />
+                )}
+                {edit && (
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                    Editando
+                  </span>
+                )}
               </div>
-              <h2 className="text-base font-bold text-gray-900 leading-tight">{i.titulo}</h2>
-              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+
+              {edit ? (
+                <EditField field="titulo" value={v('titulo')} edit draft={draft} onChange={setDraft} placeholder="Título" />
+              ) : (
+                <h2 className="text-base font-bold text-gray-900 leading-tight">{i.titulo}</h2>
+              )}
+
+              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
                 <span className="flex items-center gap-1"><MapPin size={11}/>{i.empresa}</span>
                 {i.area && <span>{i.area}</span>}
                 {i.solicitante && <span className="flex items-center gap-1"><User size={11}/>{i.solicitante}</span>}
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <X size={18} className="text-gray-500" />
-            </button>
+
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Admin actions */}
+              {isAdmin && !edit && (
+                <button
+                  onClick={() => setEdit(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg transition-colors"
+                  title="Editar campos (solo admin)"
+                >
+                  <Pencil size={12} /> Editar
+                </button>
+              )}
+              {edit && (
+                <>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !hasChanges}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-lg transition-colors"
+                  >
+                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                    Guardar
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    disabled={saving}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </>
+              )}
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X size={18} className="text-gray-500" />
+              </button>
+            </div>
           </div>
 
           {/* Progress bar */}
-          {avancePct > 0 && (
+          {avancePct > 0 && !edit && (
             <div className="mt-3">
               <div className="flex justify-between text-[10px] text-gray-400 mb-1">
                 <span>Avance</span><span>{estadoDef?.avance ?? '—'}</span>
@@ -107,51 +305,97 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
           )}
 
           {/* Badges row */}
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div className="flex flex-wrap gap-2 mt-3 items-center">
             <Tooltip content={<span>{fwDef?.descripcion}</span>}>
               <DimensionBadge label={fwName} />
             </Tooltip>
-            <CostoBadge label={i.costoEstimado} />
+            {!edit && <CostoBadge label={i.costoEstimado} />}
+            {edit && (
+              <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                <span>Costo:</span>
+                <EditSelect field="costoEstimado" value={v('costoEstimado')} options={COSTOS} edit draft={draft} onChange={setDraft} />
+                <span>·</span>
+                <span>Prioridad:</span>
+                <EditSelect field="prioridad" value={v('prioridad')} options={PRIORIDADES} edit draft={draft} onChange={setDraft} />
+              </div>
+            )}
           </div>
+
+          {/* Save error/success banner */}
+          {saveError && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+              <AlertTriangle size={12} className="text-red-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-red-800 leading-relaxed">{saveError}</p>
+            </div>
+          )}
+          {saveSuccess && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg fade-in">
+              <ShieldCheck size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-emerald-800 leading-relaxed">Cambios guardados correctamente en Cosmos DB.</p>
+            </div>
+          )}
         </div>
 
         <div className="px-6 py-5 flex-1">
           {/* 1. Resumen ejecutivo */}
           <Section title="Resumen Ejecutivo" icon={Zap}>
-            <div className="bg-brand-50 rounded-xl p-4 mb-3">
-              <p className="text-sm text-brand-900 leading-relaxed font-medium">{i.descripcion}</p>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-gray-500 mb-1">Objetivo de negocio</p>
-              <p className="text-sm text-gray-700 leading-relaxed">{i.objetivos}</p>
-            </div>
+            {edit ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Descripción</label>
+                  <EditField field="descripcion" value={v('descripcion')} type="textarea" edit draft={draft} onChange={setDraft} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Objetivo de negocio</label>
+                  <EditField field="objetivos" value={v('objetivos')} type="textarea" edit draft={draft} onChange={setDraft} />
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="bg-brand-50 rounded-xl p-4 mb-3">
+                  <p className="text-sm text-brand-900 leading-relaxed font-medium whitespace-pre-wrap">{i.descripcion}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-gray-500 mb-1">Objetivo de negocio</p>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{i.objetivos}</p>
+                </div>
+              </>
+            )}
           </Section>
 
           {/* 2. Problema de negocio */}
           <Section title="Problema de Negocio" icon={AlertTriangle}>
-            <BulletText text={i.puntosDolor} />
+            <EditField field="puntosDolor" value={v('puntosDolor')} type="textarea" edit={edit} draft={draft} onChange={setDraft} />
           </Section>
 
           {/* 3. Solución propuesta */}
           <Section title="Solución Propuesta" icon={CheckCircle}>
-            <BulletText text={i.planAccion} />
+            <EditField field="planAccion" value={v('planAccion')} type="textarea" edit={edit} draft={draft} onChange={setDraft} />
           </Section>
 
           {/* 4. Riesgos y cuellos de botella */}
-          {(i.cuellosBottela || i.bloqueadores) && (
+          {(i.cuellosBottela || i.bloqueadores || edit) && (
             <Section title="Riesgos y Cuellos de Botella" icon={AlertTriangle}>
-              {i.cuellosBottela && (
-                <div className="mb-3">
+              <div className="space-y-3">
+                <div>
                   <p className="text-xs font-semibold text-amber-600 mb-1">Cuellos de botella identificados</p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{i.cuellosBottela}</p>
+                  {edit ? (
+                    <EditField field="cuellosBottela" value={v('cuellosBottela')} type="textarea" edit draft={draft} onChange={setDraft} />
+                  ) : (
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{i.cuellosBottela || '—'}</p>
+                  )}
                 </div>
-              )}
-              {i.bloqueadores && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-amber-700 mb-1">Estado actual y logros</p>
-                  <p className="text-sm text-amber-900 leading-relaxed">{i.bloqueadores}</p>
+                <div>
+                  <p className="text-xs font-semibold text-amber-700 mb-1">Bloqueadores / Comentarios / Cierre y Logros</p>
+                  {edit ? (
+                    <EditField field="bloqueadores" value={v('bloqueadores')} type="textarea" edit draft={draft} onChange={setDraft} />
+                  ) : (
+                    i.bloqueadores
+                      ? <div className="bg-amber-50 border border-amber-200 rounded-xl p-3"><p className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">{i.bloqueadores}</p></div>
+                      : <p className="text-sm text-gray-400 italic">—</p>
+                  )}
                 </div>
-              )}
+              </div>
             </Section>
           )}
 
@@ -169,7 +413,7 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
 
               <div className="border border-gray-100 rounded-xl p-3">
                 <p className="text-xs font-semibold text-gray-500 mb-1">Madurez Objetivo</p>
-                <p className="text-lg font-black text-brand-700">{madurezNum > 0 ? `Nv. ${madurezNum}` : i.nivelMadurez}</p>
+                <p className="text-lg font-black text-brand-700">{madurezNum > 0 ? `Nv. ${madurezNum}` : i.nivelMadurez || '—'}</p>
                 {madurezDef && <p className="text-[10px] text-gray-500">{madurezDef.nombre}</p>}
               </div>
             </div>
@@ -178,37 +422,88 @@ export function InitiativeModal({ iniciativa: i, onClose }: Props) {
           {/* 6. Esfuerzo, costos y plazos */}
           <Section title="Esfuerzo, Costos y Plazos" icon={Clock}>
             <div className="border border-gray-100 rounded-xl overflow-hidden">
-              <InfoRow label="Tipo" value={i.tipo} />
-              <InfoRow label="Prioridad" value={i.prioridad} />
-              <InfoRow label="Complejidad" value={i.complejidad} />
-              <InfoRow label="Tiempo requerido" value={i.tiempoRequerido} />
+              <InfoRow
+                label="Tipo"
+                value={edit
+                  ? <EditSelect field="tipo" value={v('tipo')} options={TIPOS} edit draft={draft} onChange={setDraft} />
+                  : i.tipo}
+              />
+              <InfoRow
+                label="Prioridad"
+                value={edit
+                  ? <EditSelect field="prioridad" value={v('prioridad')} options={PRIORIDADES} edit draft={draft} onChange={setDraft} />
+                  : i.prioridad}
+              />
+              <InfoRow
+                label="Complejidad"
+                value={edit
+                  ? <EditSelect field="complejidad" value={v('complejidad')} options={COMPLEJIDADES} edit draft={draft} onChange={setDraft} />
+                  : i.complejidad}
+              />
+              <InfoRow
+                label="Tiempo requerido"
+                value={edit
+                  ? <EditField field="tiempoRequerido" value={v('tiempoRequerido')} edit draft={draft} onChange={setDraft} />
+                  : i.tiempoRequerido}
+              />
               <InfoRow label="Inicio proyectado" value={i.fechaInicioProy} />
               <InfoRow label="Inicio real" value={i.fechaInicioReal} />
               <InfoRow label="Término real" value={i.fechaTerminoReal} />
-              <InfoRow label="Costo estimado" value={<CostoBadge label={i.costoEstimado} />} />
-              {i.costoReal && <InfoRow label="Costo real (USD)" value={i.costoReal} />}
-              {i.ahorro && <InfoRow label="Ahorro estimado" value={i.ahorro} />}
+              <InfoRow
+                label="Costo estimado"
+                value={edit
+                  ? <EditSelect field="costoEstimado" value={v('costoEstimado')} options={COSTOS} edit draft={draft} onChange={setDraft} />
+                  : <CostoBadge label={i.costoEstimado} />}
+              />
+              {(i.costoReal || edit) && (
+                <InfoRow label="Costo real (USD)" value={edit
+                  ? <EditField field="costoReal" value={v('costoReal')} edit draft={draft} onChange={setDraft} />
+                  : i.costoReal} />
+              )}
+              {(i.ahorro || edit) && (
+                <InfoRow label="Ahorro estimado" value={edit
+                  ? <EditField field="ahorro" value={v('ahorro')} edit draft={draft} onChange={setDraft} />
+                  : i.ahorro} />
+              )}
               <InfoRow label="Sistemas involucrados" value={i.sistemas} />
               <InfoRow label="Sub Área" value={i.subArea} />
             </div>
           </Section>
 
           {/* Recursos */}
-          {(i.recursosFuera || i.recursosTA || i.recursosNuevos) && (
+          {(i.recursosFuera || i.recursosTA || i.recursosNuevos || edit) && (
             <Section title="Recursos Requeridos" icon={User}>
               <div className="border border-gray-100 rounded-xl overflow-hidden">
-                <InfoRow label="Recursos externos a TA" value={i.recursosFuera} />
-                <InfoRow label="Recursos de TA" value={i.recursosTA} />
-                <InfoRow label="Nuevos recursos" value={i.recursosNuevos} />
+                <InfoRow label="Recursos externos a TA" value={edit
+                  ? <EditField field="recursosFuera" value={v('recursosFuera')} edit draft={draft} onChange={setDraft} />
+                  : i.recursosFuera} />
+                <InfoRow label="Recursos de TA" value={edit
+                  ? <EditField field="recursosTA" value={v('recursosTA')} edit draft={draft} onChange={setDraft} />
+                  : i.recursosTA} />
+                <InfoRow label="Nuevos recursos" value={edit
+                  ? <EditField field="recursosNuevos" value={v('recursosNuevos')} edit draft={draft} onChange={setDraft} />
+                  : i.recursosNuevos} />
               </div>
             </Section>
           )}
 
           {/* ¿Qué necesita del C-suite? */}
-          {i.bloqueadores && i.bloqueadores.toLowerCase().includes('requiere') && (
+          {!edit && i.bloqueadores && i.bloqueadores.toLowerCase().includes('requiere') && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
               <p className="text-xs font-bold text-red-700 uppercase tracking-wide mb-1">¿Qué necesita del C-suite?</p>
-              <p className="text-sm text-red-900">{i.bloqueadores}</p>
+              <p className="text-sm text-red-900 whitespace-pre-wrap">{i.bloqueadores}</p>
+            </div>
+          )}
+
+          {/* Comentarios públicos — solo cuando NO se está editando */}
+          {!edit && <CommentsSection initiativeId={i.id} />}
+
+          {/* Admin hint */}
+          {!edit && !isAdmin && (
+            <div className="text-center py-4 px-3 bg-gray-50 border border-dashed border-gray-200 rounded-xl">
+              <p className="text-[11px] text-gray-400">
+                Para editar este hallazgo inicia sesión como administrador (botón "Admin" en la barra superior).
+              </p>
             </div>
           )}
         </div>
