@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight, Lock, LogOut, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight, Lock, LogOut, ShieldCheck, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AdminLoginModal } from '../AdminLoginModal';
+
+/** Borra los flags localStorage del tour y dispara el evento que TourEngine escucha */
+function restartTour() {
+  localStorage.removeItem('ta_tour_v3_done');
+  localStorage.removeItem('ta_portfolio_tour_v2_done');
+  // El TourEngine escucha este evento para re-evaluar si debe mostrarse
+  window.dispatchEvent(new Event('tour:dismissed'));
+}
 
 const nav = [
   { to: '/', icon: LayoutDashboard, label: 'Inicio', tour: 'nav-inicio' },
@@ -54,6 +62,16 @@ export function Navbar({ breadcrumb }: NavbarProps) {
 
         {/* Admin button / state */}
         <div className="flex items-center gap-3">
+          {/* Reiniciar tour de bienvenida */}
+          <button
+            onClick={restartTour}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-brand-200 hover:bg-brand-800 hover:text-white transition-colors border border-brand-700/50"
+            title="Volver a ver el tour de bienvenida"
+          >
+            <HelpCircle size={12} />
+            <span className="hidden lg:inline">Tour</span>
+          </button>
+
           {isAdmin ? (
             <div className="flex items-center gap-1.5">
               <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30">
