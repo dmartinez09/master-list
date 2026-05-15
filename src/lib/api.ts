@@ -124,15 +124,30 @@ export function deleteComment(initiativeId: string, commentId: string): Promise<
   });
 }
 
-/* ─── Admin auth ──────────────────────────────────────────── */
+/* ─── Auth: admin + managers ──────────────────────────────── */
 
-export interface LoginResponse {
+export type Role = 'admin' | 'manager';
+
+export interface AdminLoginResponse {
   token: string;
   role: 'admin';
 }
 
-export function loginAdmin(password: string): Promise<LoginResponse> {
-  return http<LoginResponse>('/admin/login', {
+export interface ManagerLoginResponse {
+  token: string;
+  role: 'manager';
+  userId: string;
+  userName: string;
+}
+
+export interface PublicUser {
+  id: string;
+  name: string;
+  order: number;
+}
+
+export function loginAdmin(password: string): Promise<AdminLoginResponse> {
+  return http<AdminLoginResponse>('/admin/login', {
     method: 'POST',
     body: JSON.stringify({ password }),
   });
@@ -140,4 +155,75 @@ export function loginAdmin(password: string): Promise<LoginResponse> {
 
 export function verifyAdmin(): Promise<{ ok: true; role: 'admin' }> {
   return http<{ ok: true; role: 'admin' }>('/admin/verify');
+}
+
+export function listUsers(): Promise<PublicUser[]> {
+  return http<PublicUser[]>('/users');
+}
+
+export function loginUser(userId: string, password: string): Promise<ManagerLoginResponse> {
+  return http<ManagerLoginResponse>('/users/login', {
+    method: 'POST',
+    body: JSON.stringify({ userId, password }),
+  });
+}
+
+export function changeMyPassword(oldPassword: string, newPassword: string): Promise<{ ok: true }> {
+  return http<{ ok: true }>('/users/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+}
+
+export function verifyMe(): Promise<{ role: Role; userId?: string; userName?: string }> {
+  return http('/users/me');
+}
+
+/* ─── Aprobación de iniciativas (admin o manager) ─────────── */
+
+export type ApprovalStatus = 'aprobado' | 'a-evaluar' | 'pendiente';
+
+export function setApproval(initiativeId: string, status: ApprovalStatus): Promise<Iniciativa> {
+  return http<Iniciativa>(`/initiatives/${encodeURIComponent(initiativeId)}/approval`, {
+    method: 'PATCH',
+    body: JSON.stringify({ approvalStatus: status }),
+  });
+}
+
+/* ─── Adjuntos (PDF/Word/Excel) ───────────────────────────── */
+
+export interface Attachment {
+  id: string;
+  initiativeId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  uploadedByRole: 'admin' | 'manager';
+  uploadedAt: string;
+}
+
+export function listAttachments(initiativeId: string): Promise<Attachment[]> {
+  return http<Attachment[]>(`/initiatives/${encodeURIComponent(initiativeId)}/attachments`);
+}
+
+export interface DownloadResult { filename: string; mimeType: string; base64: string; sizeBytes: number }
+export function downloadAttachment(initiativeId: string, attachmentId: string): Promise<DownloadResult> {
+  return http(`/initiatives/${encodeURIComponent(initiativeId)}/attachments/${encodeURIComponent(attachmentId)}/download`);
+}
+
+export function uploadAttachment(
+  initiativeId: string,
+  data: { filename: string; mimeType: string; base64: string },
+): Promise<Attachment> {
+  return http<Attachment>(`/initiatives/${encodeURIComponent(initiativeId)}/attachments`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteAttachment(initiativeId: string, attachmentId: string): Promise<{ ok: true }> {
+  return http(`/initiatives/${encodeURIComponent(initiativeId)}/attachments/${encodeURIComponent(attachmentId)}`, {
+    method: 'DELETE',
+  });
 }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { initiativesContainer } from '../lib/cosmos.js';
-import { requireAdmin } from '../lib/auth.js';
+import { requireAdmin, requireAuth, type SessionPayload } from '../lib/auth.js';
 
 export const initiativesRouter = Router();
 
@@ -22,8 +22,9 @@ async function getInitiativesCached(): Promise<any[]> {
     return cachedList.data;
   }
   const t0 = Date.now();
+  // Excluye docs internos (users, attachments) que comparten container
   const { resources } = await initiativesContainer.items
-    .query('SELECT * FROM c')
+    .query("SELECT * FROM c WHERE (NOT IS_DEFINED(c.type)) OR c.type = 'initiative'")
     .fetchAll();
   const sorted = resources.sort((a, b) => String(a.id).localeCompare(String(b.id)));
   cachedList = { data: sorted, expiresAt: now + CACHE_TTL_MS };
@@ -76,8 +77,10 @@ async function nextId(): Promise<string> {
   return `ID-${String(max + 1).padStart(3, '0')}`;
 }
 
-/** POST /api/initiatives — admin crea un nuevo hallazgo */
-initiativesRouter.post('/', requireAdmin, async (req, res) => {
+/** POST /api/initiatives — admin o manager crea un nuevo hallazgo */
+initiativesRouter.post('/', requireAuth, async (req, res) => {
+  const session: SessionPayload = (req as any).session;
+
   // Reutilizamos el mismo whitelist + titulo y empresa obligatorios
   const CreateSchema = EditableFields.extend({
     titulo: z.string().min(3, 'Título obligatorio').max(500),
@@ -94,15 +97,19 @@ initiativesRouter.post('/', requireAdmin, async (req, res) => {
   try {
     const id = await nextId();
     const now = new Date().toISOString();
+    const isManager = session.role === 'manager';
+
     const doc = {
       id,
-      // Defaults razonables
-      estado: 'Solicitado / A validar',
-      prioridad: 'Media',
       ...parsed.data,
+      // Managers SIEMPRE crean en "Solicitado / A validar". Admin puede elegir.
+      estado: isManager ? 'Solicitado / A validar' : (parsed.data.estado ?? 'Solicitado / A validar'),
+      prioridad: parsed.data.prioridad ?? 'Media',
       _created_at: now,
       _updated_at: now,
-      _updated_by: 'admin',
+      _updated_by: session.userName ?? session.role,
+      _created_by: session.userName ?? session.role,
+      _created_by_role: session.role,
     };
     const { resource } = await initiativesContainer.items.create(doc);
     invalidateCache();
@@ -187,6 +194,48 @@ initiativesRouter.patch('/:id', requireAdmin, async (req, res) => {
   } catch (err: any) {
     console.error(`PATCH /initiatives/${id} error:`, err.message);
     res.status(500).json({ error: 'No se pudo actualizar', detail: err.message });
+  }
+});
+
+/** PATCH /api/initiatives/:id/approval — admin o manager marca Aprobado / A Evaluar */
+initiativesRouter.patch('/:id/approval', requireAuth, async (req, res) => {
+  const session: SessionPayload = (req as any).session;
+  const id = String(req.params.id);
+
+  const ApprovalSchema = z.object({
+    approvalStatus: z.enum(['aprobado', 'a-evaluar', 'pendiente']),
+  });
+  const parsed = ApprovalSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Datos inválidos' });
+  }
+
+  try {
+    const { resources } = await initiativesContainer.items
+      .query({
+        query: 'SELECT * FROM c WHERE c.id = @id',
+        parameters: [{ name: '@id', value: id }],
+      })
+      .fetchAll();
+    if (!resources.length) return res.status(404).json({ error: 'Hallazgo no encontrado' });
+
+    const current = resources[0];
+    const now = new Date().toISOString();
+    const updated = {
+      ...current,
+      approvalStatus: parsed.data.approvalStatus,
+      approvalBy: session.userName ?? session.role,
+      approvalByRole: session.role,
+      approvalAt: now,
+      _updated_at: now,
+      _updated_by: session.userName ?? session.role,
+    };
+    const { resource } = await initiativesContainer.items.upsert(updated);
+    invalidateCache();
+    res.json(resource);
+  } catch (err: any) {
+    console.error(`PATCH /initiatives/${id}/approval error:`, err.message);
+    res.status(500).json({ error: 'No se pudo actualizar aprobación', detail: err.message });
   }
 });
 

@@ -5,9 +5,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { pingCosmos } from './lib/cosmos.js';
+import { ensureUsersSeeded } from './lib/users.js';
 import { initiativesRouter } from './routes/initiatives.js';
 import { commentsRouter } from './routes/comments.js';
 import { adminRouter } from './routes/admin.js';
+import { usersRouter } from './routes/users.js';
+import { attachmentsRouter, ensureAttachmentsContainer } from './routes/attachments.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,8 +62,10 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/admin', adminRouter);
+app.use('/api/users', usersRouter);
 app.use('/api/initiatives', initiativesRouter);
 app.use('/api/initiatives', commentsRouter);
+app.use('/api/initiatives', attachmentsRouter);
 
 // 404 para rutas /api/*
 app.use('/api', (req, res) => {
@@ -103,6 +108,15 @@ async function start() {
     console.error('   Saliendo. Revisa las credenciales (COSMOS_ENDPOINT, COSMOS_KEY)\n');
     process.exit(1);
   }
+
+  // Seeds (idempotentes — no hacen nada si ya existen)
+  try {
+    await ensureUsersSeeded();
+    await ensureAttachmentsContainer();
+  } catch (err: any) {
+    console.error('⚠️  Error en seeds:', err.message);
+  }
+
   app.listen(PORT, () => {
     if (isProduction) {
       console.log(`\n✅ Servidor listo en puerto ${PORT}`);

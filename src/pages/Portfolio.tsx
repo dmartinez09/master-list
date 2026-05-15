@@ -46,7 +46,9 @@ function loadHiddenCols(): Set<string> {
 
 export default function Portfolio() {
   const { initiatives, loading, error, refetch, updateLocal } = useInitiatives();
-  const { isAdmin } = useAuth();
+  const { isAdmin, session } = useAuth();
+  const isAuthed = session != null; // admin O manager
+
   const location = useLocation();
 
   // Toast de feedback al mover una tarjeta
@@ -253,12 +255,14 @@ export default function Portfolio() {
               <p className="text-xs text-gray-500">{filtered.length} de {initiatives.length} iniciativas</p>
             </div>
             <div className="flex items-center gap-2">
-              {/* Crear nuevo (solo admin) */}
-              {isAdmin && (
+              {/* Crear nuevo (admin o cualquier manager) */}
+              {isAuthed && (
                 <button
                   onClick={() => setCreating(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg transition-colors"
-                  title="Crear un nuevo hallazgo"
+                  title={isAdmin
+                    ? 'Crear un nuevo hallazgo'
+                    : 'Crear nuevo (quedará en Solicitado / A validar)'}
                 >
                   <PlusCircle size={13} /> Nueva tarea
                 </button>

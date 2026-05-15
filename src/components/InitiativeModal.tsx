@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, MapPin, User, Clock, AlertTriangle, CheckCircle, Target, Zap,
-  Pencil, Save, Loader2, ShieldCheck, PlusCircle,
+  Pencil, Save, Loader2, ShieldCheck, PlusCircle, ThumbsUp, ThumbsDown,
+  Paperclip, Upload, FileText, Download, Trash2, Flame,
 } from 'lucide-react';
 import type { Iniciativa } from '../types';
 import { EstadoBadge, DimensionBadge, CostoBadge } from './ui/Badge';
@@ -9,9 +10,10 @@ import { Tooltip } from './ui/Tooltip';
 import { ESTADOS, NIVELES_MADUREZ, PIPELINE_ORDER } from '../data/catalogs';
 import { FRAMEWORK_DIMENSIONS } from '../utils/framework';
 import { CommentsSection } from './CommentsSection';
+import { AttachmentsSection } from './AttachmentsSection';
 import { useAuth } from '../contexts/AuthContext';
 import { useInitiatives } from '../contexts/InitiativesContext';
-import { updateInitiative, createInitiative } from '../lib/api';
+import { updateInitiative, createInitiative, setApproval, type ApprovalStatus } from '../lib/api';
 
 interface Props {
   iniciativa: Iniciativa;
@@ -23,8 +25,33 @@ interface Props {
 /* ───────────────────────────────────────────────────────────────
    Catálogos auxiliares
 ─────────────────────────────────────────────────────────────── */
-const PRIORIDADES = ['Alta', 'Media', 'Baja'];
+const PRIORIDADES = ['Urgente', 'Alta', 'Media', 'Baja'];
 const COMPLEJIDADES = ['Alta', 'Media', 'Baja'];
+
+/** Pill destacada para mostrar prioridad en modo lectura — colores fuertes + Urgente con pulso */
+function PrioridadPill({ value }: { value?: string | null }) {
+  const v = String(value ?? '').trim();
+  const matched = v.toLowerCase().startsWith('urgente') ? 'Urgente'
+    : v.toLowerCase().startsWith('alta') ? 'Alta'
+    : v.toLowerCase().startsWith('media') ? 'Media'
+    : v.toLowerCase().startsWith('baja') ? 'Baja'
+    : '';
+  if (!matched) return <span className="text-xs text-gray-400">—</span>;
+
+  const cfg = {
+    Urgente: { bg: 'bg-red-600',    text: 'text-white', ring: 'ring-red-300',   pulse: true,  icon: <Flame size={11} /> },
+    Alta:    { bg: 'bg-orange-500', text: 'text-white', ring: 'ring-orange-200', pulse: false, icon: null },
+    Media:   { bg: 'bg-amber-400',  text: 'text-amber-900', ring: 'ring-amber-200', pulse: false, icon: null },
+    Baja:    { bg: 'bg-slate-300',  text: 'text-slate-700', ring: 'ring-slate-200', pulse: false, icon: null },
+  }[matched as 'Urgente' | 'Alta' | 'Media' | 'Baja'];
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ring-2 ring-offset-1 ${cfg.bg} ${cfg.text} ${cfg.ring} ${cfg.pulse ? 'animate-pulse' : ''}`}>
+      {cfg.icon}
+      {matched}
+    </span>
+  );
+}
 const COSTOS = ['$0k', '<$5k', '$5–10k', '>$10k'];
 const TIPOS = ['Iniciativa corporativa', 'Proyecto', 'Tarea'];
 
@@ -147,7 +174,8 @@ function EditSelect({
    Modal principal
 ─────────────────────────────────────────────────────────────── */
 export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: Props) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, session } = useAuth();
+  const isManager = session != null;
   const { updateLocal, addLocal } = useInitiatives();
 
   // En createMode siempre arranca en edit
@@ -156,6 +184,10 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Aprobación
+  const [savingApproval, setSavingApproval] = useState<ApprovalStatus | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   // Reset state si cambia la iniciativa
   useEffect(() => {
@@ -246,9 +278,24 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
     }
   };
 
+  const handleApproval = async (status: ApprovalStatus) => {
+    setApprovalError(null);
+    setSavingApproval(status);
+    try {
+      const updated = await setApproval(i.id, status);
+      updateLocal(i.id, updated);
+    } catch (err: any) {
+      setApprovalError(err.message ?? 'No se pudo guardar la decisión');
+    } finally {
+      setSavingApproval(null);
+    }
+  };
+
   // Para mostrar valor "actual" (draft sobrescribe el original)
   const v = (field: keyof Iniciativa): string =>
     ((draft[field] as string) ?? (i[field] as string) ?? '') as string;
+
+  const currentApproval = (i as any).approvalStatus as ApprovalStatus | undefined;
 
   return (
     <div className="fixed inset-0 z-50 flex" onClick={!edit ? onClose : undefined}>
@@ -475,7 +522,7 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
                 label="Prioridad"
                 value={edit
                   ? <EditSelect field="prioridad" value={v('prioridad')} options={PRIORIDADES} edit draft={draft} onChange={setDraft} />
-                  : i.prioridad}
+                  : <PrioridadPill value={i.prioridad} />}
               />
               <InfoRow
                 label="Complejidad"
@@ -511,6 +558,13 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
               <InfoRow label="Sistemas involucrados" value={i.sistemas} />
               <InfoRow label="Sub Área" value={i.subArea} />
             </div>
+
+            {/* Adjuntos: cotizaciones PDF/Word/Excel */}
+            {!createMode && (
+              <div className="mt-3">
+                <AttachmentsSection initiativeId={i.id} canUpload={isManager} canDeleteOwn={isManager} isAdmin={isAdmin} currentUserName={session?.userName} />
+              </div>
+            )}
           </Section>
 
           {/* Recursos */}
@@ -528,6 +582,83 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
                   : i.recursosNuevos} />
               </div>
             </Section>
+          )}
+
+          {/* Botones de decisión: Aprobado / A Evaluar — entre Recursos y Comentarios */}
+          {!createMode && !edit && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-6 h-6 rounded bg-brand-50 flex items-center justify-center">
+                  <ThumbsUp size={13} className="text-brand-600" />
+                </span>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500">Decisión del equipo</h3>
+              </div>
+
+              {/* Estado actual */}
+              {currentApproval && currentApproval !== 'pendiente' && (
+                <div className={`mb-3 p-3 rounded-xl border flex items-start gap-2 ${
+                  currentApproval === 'aprobado'
+                    ? 'bg-emerald-50 border-emerald-200'
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  {currentApproval === 'aprobado'
+                    ? <ThumbsUp size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                    : <ThumbsDown size={14} className="text-red-600 shrink-0 mt-0.5" />}
+                  <div className="flex-1">
+                    <p className={`text-xs font-bold ${currentApproval === 'aprobado' ? 'text-emerald-800' : 'text-red-800'}`}>
+                      {currentApproval === 'aprobado' ? 'Aprobado' : 'A Evaluar'}
+                    </p>
+                    {(i as any).approvalBy && (
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        por {(i as any).approvalBy} ·
+                        {(i as any).approvalAt ? new Date((i as any).approvalAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Acciones */}
+              {isManager ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleApproval('aprobado')}
+                    disabled={savingApproval !== null}
+                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
+                      currentApproval === 'aprobado'
+                        ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
+                        : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                    }`}
+                  >
+                    {savingApproval === 'aprobado' ? <Loader2 size={14} className="animate-spin" /> : <ThumbsUp size={14} />}
+                    Aprobado
+                  </button>
+                  <button
+                    onClick={() => handleApproval('a-evaluar')}
+                    disabled={savingApproval !== null}
+                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
+                      currentApproval === 'a-evaluar'
+                        ? 'bg-red-600 text-white ring-2 ring-red-300'
+                        : 'bg-red-500 hover:bg-red-600 text-white'
+                    }`}
+                  >
+                    {savingApproval === 'a-evaluar' ? <Loader2 size={14} className="animate-spin" /> : <ThumbsDown size={14} />}
+                    A Evaluar
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-400 italic">
+                  Solo usuarios autenticados (managers o admin) pueden aprobar o marcar a evaluar este hallazgo.
+                </p>
+              )}
+
+              {approvalError && (
+                <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg">
+                  <AlertTriangle size={12} className="text-red-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-red-800">{approvalError}</p>
+                </div>
+              )}
+            </div>
           )}
 
           {/* ¿Qué necesita del C-suite? */}

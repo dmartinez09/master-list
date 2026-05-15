@@ -17,6 +17,10 @@ export const database = cosmosClient.database(databaseId);
 export const initiativesContainer: Container = database.container(initiativesContainerId);
 export const commentsContainer: Container = database.container(commentsContainerId);
 
+/** Alias para ser usado por users + attachments (almacenan tipo=user/attachment en este container) */
+export const usersContainer = initiativesContainer;
+export const attachmentsContainer = initiativesContainer;
+
 export const cosmosConfig = {
   endpoint,
   databaseId,

@@ -1,45 +1,65 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { loginAdmin, verifyAdmin, setAuthToken } from '../lib/api';
+import {
+  loginAdmin, loginUser, verifyMe, setAuthToken,
+  type Role,
+} from '../lib/api';
+
+interface Session {
+  role: Role;
+  userId?: string;
+  userName?: string;
+}
 
 interface AuthContextValue {
+  /** Conveniencias derivadas */
   isAdmin: boolean;
+  isManager: boolean;       // admin O manager (cualquiera autenticado)
+  /** Datos de sesión */
+  session: Session | null;
   token: string | null;
   loading: boolean;
-  login: (password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Acciones */
+  loginAsAdmin: (password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  loginAsUser: (userId: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const STORAGE_KEY = 'ta_admin_token';
+
+const TOKEN_KEY = 'ta_session_token';
+const SESSION_KEY = 'ta_session_data';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [session, setSession] = useState<Session | null>(() => {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null'); }
+    catch { return null; }
+  });
   const [loading, setLoading] = useState(true);
 
-  // Sincronizar el token con el cliente API
-  useEffect(() => {
-    setAuthToken(token);
-  }, [token]);
+  // Sync token with API client
+  useEffect(() => { setAuthToken(token); }, [token]);
 
-  // Al arrancar, verificar si el token guardado sigue siendo válido
+  // Verify saved token on mount
   useEffect(() => {
     let cancelled = false;
     async function verify() {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        setLoading(false);
-        return;
-      }
+      const stored = localStorage.getItem(TOKEN_KEY);
+      if (!stored) { setLoading(false); return; }
       setAuthToken(stored);
       try {
-        await verifyAdmin();
-        if (!cancelled) setToken(stored);
-      } catch {
-        // Token expirado o inválido
+        const me = await verifyMe();
         if (!cancelled) {
-          localStorage.removeItem(STORAGE_KEY);
+          setToken(stored);
+          setSession({ role: me.role, userId: me.userId, userName: me.userName });
+        }
+      } catch {
+        if (!cancelled) {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(SESSION_KEY);
           setAuthToken(null);
           setToken(null);
+          setSession(null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -49,12 +69,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  const login = useCallback(async (password: string) => {
+  const persist = (t: string, s: Session) => {
+    localStorage.setItem(TOKEN_KEY, t);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    setAuthToken(t);
+    setToken(t);
+    setSession(s);
+  };
+
+  const loginAsAdmin = useCallback(async (password: string) => {
     try {
-      const { token: newToken } = await loginAdmin(password);
-      localStorage.setItem(STORAGE_KEY, newToken);
-      setAuthToken(newToken);
-      setToken(newToken);
+      const r = await loginAdmin(password);
+      persist(r.token, { role: 'admin' });
+      return { ok: true as const };
+    } catch (err: any) {
+      return { ok: false as const, error: err.message ?? 'Error al iniciar sesión' };
+    }
+  }, []);
+
+  const loginAsUser = useCallback(async (userId: string, password: string) => {
+    try {
+      const r = await loginUser(userId, password);
+      persist(r.token, { role: 'manager', userId: r.userId, userName: r.userName });
       return { ok: true as const };
     } catch (err: any) {
       return { ok: false as const, error: err.message ?? 'Error al iniciar sesión' };
@@ -62,13 +98,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(SESSION_KEY);
     setAuthToken(null);
     setToken(null);
+    setSession(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAdmin: Boolean(token), token, loading, login, logout }}>
+    <AuthContext.Provider value={{
+      isAdmin: session?.role === 'admin',
+      isManager: session != null, // cualquier sesión activa
+      session,
+      token,
+      loading,
+      loginAsAdmin,
+      loginAsUser,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );

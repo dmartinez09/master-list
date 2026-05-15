@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight, Lock, LogOut, ShieldCheck, HelpCircle } from 'lucide-react';
+import {
+  LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight,
+  Lock, LogOut, ShieldCheck, HelpCircle, KeyRound, User as UserIcon,
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { AdminLoginModal } from '../AdminLoginModal';
+import { LoginModal } from '../LoginModal';
 
 /** Borra los flags localStorage del tour y dispara el evento que TourEngine escucha */
 function restartTour() {
   localStorage.removeItem('ta_tour_v3_done');
   localStorage.removeItem('ta_portfolio_tour_v2_done');
-  // El TourEngine escucha este evento para re-evaluar si debe mostrarse
   window.dispatchEvent(new Event('tour:dismissed'));
 }
 
@@ -22,9 +24,20 @@ const nav = [
 
 interface NavbarProps { breadcrumb?: string[] }
 
+const AVATAR_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#16a34a', '#d97706', '#dc2626'];
+const avatarColor = (s: string) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+};
+const initials = (n: string) => n.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+
 export function Navbar({ breadcrumb }: NavbarProps) {
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin, session, logout } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const isManagerSession = session?.role === 'manager';
 
   return (
     <header className="bg-brand-900 text-white shadow-lg z-40 relative">
@@ -60,9 +73,8 @@ export function Navbar({ breadcrumb }: NavbarProps) {
           ))}
         </nav>
 
-        {/* Admin button / state */}
-        <div className="flex items-center gap-3">
-          {/* Reiniciar tour de bienvenida */}
+        {/* Tour + login/user */}
+        <div className="flex items-center gap-2">
           <button
             onClick={restartTour}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-brand-200 hover:bg-brand-800 hover:text-white transition-colors border border-brand-700/50"
@@ -72,7 +84,8 @@ export function Navbar({ breadcrumb }: NavbarProps) {
             <span className="hidden lg:inline">Tour</span>
           </button>
 
-          {isAdmin ? (
+          {/* Admin badge */}
+          {isAdmin && (
             <div className="flex items-center gap-1.5">
               <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30">
                 <ShieldCheck size={12} className="text-emerald-300" />
@@ -87,21 +100,66 @@ export function Navbar({ breadcrumb }: NavbarProps) {
                 <span className="hidden md:inline">Salir</span>
               </button>
             </div>
-          ) : (
+          )}
+
+          {/* Manager user menu */}
+          {isManagerSession && session?.userName && (
+            <div className="relative">
+              <button
+                onClick={() => setUserMenuOpen(o => !o)}
+                className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-brand-800 transition-colors"
+                title={`Sesión activa como ${session.userName}`}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[10px]"
+                  style={{ backgroundColor: avatarColor(session.userName) }}
+                >
+                  {initials(session.userName)}
+                </div>
+                <span className="text-xs font-semibold text-white hidden md:inline">
+                  {session.userName.split(' ')[0]}
+                </span>
+              </button>
+
+              {userMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-white text-gray-800 rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                    <p className="text-xs font-bold text-gray-900">{session.userName}</p>
+                    <p className="text-[10px] text-gray-500">Manager · Crea y aprueba tareas</p>
+                  </div>
+                  <button
+                    onClick={() => { setUserMenuOpen(false); setLoginOpen(true); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-xs hover:bg-gray-50 text-left"
+                  >
+                    <KeyRound size={12} className="text-gray-400" />
+                    Cambiar mi contraseña
+                  </button>
+                  <button
+                    onClick={() => { setUserMenuOpen(false); logout(); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-xs hover:bg-red-50 text-left text-red-600 border-t border-gray-100"
+                  >
+                    <LogOut size={12} />
+                    Cerrar sesión
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Login button (no sesión) */}
+          {!session && (
             <button
               onClick={() => setLoginOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-200 hover:bg-brand-800 hover:text-white transition-colors border border-brand-700/50"
-              title="Iniciar sesión como administrador"
+              title="Iniciar sesión"
             >
               <Lock size={12} />
-              <span className="hidden sm:inline">Admin</span>
+              <span className="hidden sm:inline">Iniciar sesión</span>
             </button>
           )}
-          <div className="text-xs text-brand-400 hidden lg:block">Master List TA v2.0</div>
         </div>
       </div>
 
-      {/* Breadcrumb */}
       {breadcrumb && breadcrumb.length > 1 && (
         <div className="flex items-center gap-1.5 px-6 pb-2 text-xs text-brand-300">
           {breadcrumb.map((b, i) => (
@@ -113,8 +171,7 @@ export function Navbar({ breadcrumb }: NavbarProps) {
         </div>
       )}
 
-      {/* Login modal */}
-      <AdminLoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </header>
   );
 }

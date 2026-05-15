@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { rateLimit } from 'express-rate-limit';
-import { signAdminToken, requireAdmin } from '../lib/auth.js';
+import { signToken, requireAdmin } from '../lib/auth.js';
 
 export const adminRouter = Router();
 
@@ -43,7 +43,7 @@ adminRouter.post('/login', loginLimiter, (req, res) => {
     return res.status(401).json({ error: 'Contraseña incorrecta' });
   }
 
-  const token = signAdminToken();
+  const token = signToken({ role: 'admin' });
   res.json({ token, role: 'admin' });
 });
 
