@@ -183,7 +183,7 @@ export function LoginModal({ open, onClose }: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900">{u.name}</p>
-                    <p className="text-[10px] text-gray-400">Manager · Crear y aprobar tareas</p>
+                    <p className="text-[10px] text-gray-400">Crear y aprobar tareas</p>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-brand-500 shrink-0" />
                 </button>
@@ -213,7 +213,7 @@ export function LoginModal({ open, onClose }: Props) {
               </div>
               <div>
                 <p className="text-sm font-bold text-gray-900">{selectedUser.name}</p>
-                <p className="text-[11px] text-gray-500">Manager</p>
+                <p className="text-[11px] text-gray-500">Equipo TA</p>
               </div>
             </div>
 

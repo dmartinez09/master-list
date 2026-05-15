@@ -125,7 +125,7 @@ export function Navbar({ breadcrumb }: NavbarProps) {
                 <div className="absolute right-0 top-full mt-1 w-56 bg-white text-gray-800 rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                   <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
                     <p className="text-xs font-bold text-gray-900">{session.userName}</p>
-                    <p className="text-[10px] text-gray-500">Manager · Crea y aprueba tareas</p>
+                    <p className="text-[10px] text-gray-500">Crea y aprueba tareas</p>
                   </div>
                   <button
                     onClick={() => { setUserMenuOpen(false); setLoginOpen(true); }}

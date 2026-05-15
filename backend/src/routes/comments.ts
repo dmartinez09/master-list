@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { rateLimit } from 'express-rate-limit';
 import { commentsContainer, initiativesContainer } from '../lib/cosmos.js';
-import { requireAdmin } from '../lib/auth.js';
+import { requireAdmin, verifyToken, type SessionPayload } from '../lib/auth.js';
 
 export const commentsRouter = Router();
 
@@ -38,11 +38,70 @@ commentsRouter.get('/:initiativeId/comments', async (req, res) => {
   }
 });
 
-/** POST /api/initiatives/:initiativeId/comments — crear */
+/** POST /api/initiatives/:initiativeId/comments — crear.
+ *  Si el request lleva token de sesión, se ignoran nombre/apellido del body
+ *  y se usa el del usuario autenticado (anti-suplantación + auditoría). */
 commentsRouter.post('/:initiativeId/comments', commentLimiter, async (req, res) => {
   const { initiativeId } = req.params;
 
-  // Validar input
+  // Detectar sesión (opcional — los comentarios son públicos pero pueden venir firmados)
+  let session: SessionPayload | null = null;
+  const header = req.headers.authorization ?? '';
+  const [scheme, token] = header.split(' ');
+  if (scheme === 'Bearer' && token) {
+    session = verifyToken(token);
+  }
+
+  // Si está logueado, validamos solo el contenido (nombre viene del token)
+  if (session && session.userName) {
+    const ContentOnly = z.object({
+      contenido: z.string().trim().min(3, 'Comentario muy corto').max(2000, 'Comentario muy largo'),
+    });
+    const parsedC = ContentOnly.safeParse(req.body);
+    if (!parsedC.success) {
+      return res.status(400).json({
+        error: 'Datos inválidos',
+        detail: parsedC.error.issues.map(i => i.message).join('; '),
+      });
+    }
+
+    // Verificar iniciativa existe
+    const { resources: found } = await initiativesContainer.items
+      .query({
+        query: 'SELECT VALUE c.id FROM c WHERE c.id = @id',
+        parameters: [{ name: '@id', value: initiativeId }],
+      })
+      .fetchAll();
+    if (!found.length) return res.status(404).json({ error: 'Hallazgo no encontrado' });
+
+    const parts = session.userName.split(' ');
+    const nombre = parts[0] ?? '';
+    const apellido = parts.slice(1).join(' ') || nombre;
+    const now = new Date().toISOString();
+
+    const comment = {
+      id: randomUUID(),
+      initiativeId,
+      nombre,
+      apellido,
+      contenido: parsedC.data.contenido,
+      createdAt: now,
+      // Auditoría
+      authenticated: true,
+      userId: session.userId ?? null,
+      userRole: session.role,
+      ipHash: hashIp(req.ip ?? req.socket.remoteAddress ?? 'unknown'),
+    };
+    try {
+      const { resource } = await commentsContainer.items.create(comment);
+      return res.status(201).json(resource);
+    } catch (err: any) {
+      console.error('POST comment (auth) error:', err.message);
+      return res.status(500).json({ error: 'No se pudo guardar el comentario', detail: err.message });
+    }
+  }
+
+  // Sin sesión: validar nombre/apellido/contenido como antes
   const parsed = NewCommentSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -51,7 +110,6 @@ commentsRouter.post('/:initiativeId/comments', commentLimiter, async (req, res) 
     });
   }
 
-  // Verificar que la iniciativa exista
   const { resources: found } = await initiativesContainer.items
     .query({
       query: 'SELECT VALUE c.id FROM c WHERE c.id = @id',
@@ -60,7 +118,6 @@ commentsRouter.post('/:initiativeId/comments', commentLimiter, async (req, res) 
     .fetchAll();
   if (!found.length) return res.status(404).json({ error: 'Hallazgo no encontrado' });
 
-  // Crear comentario
   const now = new Date().toISOString();
   const ipRaw = req.ip ?? req.socket.remoteAddress ?? 'unknown';
 
@@ -71,6 +128,7 @@ commentsRouter.post('/:initiativeId/comments', commentLimiter, async (req, res) 
     apellido: parsed.data.apellido,
     contenido: parsed.data.contenido,
     createdAt: now,
+    authenticated: false,
     ipHash: hashIp(ipRaw),
   };
 

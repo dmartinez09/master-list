@@ -27,6 +27,12 @@ export interface Comentario {
   contenido: string;
   createdAt: string;
   ipHash?: string;
+  /** True si fue posteado por un usuario autenticado (no anónimo) */
+  authenticated?: boolean;
+  /** ID del usuario si está autenticado */
+  userId?: string;
+  /** Rol al momento de postear */
+  userRole?: 'admin' | 'manager';
 }
 
 export interface NewComentario {

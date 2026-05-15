@@ -35,16 +35,33 @@ function avatarColor(seed: string): string {
 }
 
 export function CommentsSection({ initiativeId }: Props) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, session } = useAuth();
   const { comments, loading, error, submit, submitting, remove } = useComments(initiativeId);
 
-  const [nombre, setNombre] = useState('');
-  const [apellido, setApellido] = useState('');
+  /** Si hay sesión, derivamos nombre y apellido del usuario y bloqueamos los campos */
+  const sessionName = session?.userName ?? '';
+  const sessionNombre = sessionName.split(' ')[0] ?? '';
+  const sessionApellido = sessionName.split(' ').slice(1).join(' ') || sessionName.split(' ')[0] || '';
+  const isLogged = session != null;
+
+  const [nombre, setNombre] = useState(sessionNombre);
+  const [apellido, setApellido] = useState(sessionApellido);
   const [contenido, setContenido] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Si cambia la sesión, sincronizamos los campos
+  React.useEffect(() => {
+    if (isLogged) {
+      setNombre(sessionNombre);
+      setApellido(sessionApellido);
+    } else {
+      setNombre('');
+      setApellido('');
+    }
+  }, [sessionName, isLogged, sessionNombre, sessionApellido]);
 
   const reset = () => {
     setContenido('');
@@ -56,8 +73,9 @@ export function CommentsSection({ initiativeId }: Props) {
     setFormError(null);
     setSuccess(false);
 
-    const n = nombre.trim();
-    const a = apellido.trim();
+    // Si hay sesión, siempre usamos su nombre. Anti-suplantación.
+    const n = (isLogged ? sessionNombre : nombre).trim();
+    const a = (isLogged ? sessionApellido : apellido).trim();
     const c = contenido.trim();
     if (n.length < 2 || a.length < 2 || c.length < 3) {
       setFormError('Nombre y apellido (mín 2 letras) y comentario (mín 3 letras) son obligatorios.');
@@ -94,26 +112,45 @@ export function CommentsSection({ initiativeId }: Props) {
         onSubmit={handleSubmit}
         className="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4"
       >
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          <input
-            type="text"
-            placeholder="Nombre"
-            value={nombre}
-            onChange={e => setNombre(e.target.value)}
-            maxLength={50}
-            disabled={submitting}
-            className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
-          />
-          <input
-            type="text"
-            placeholder="Apellido"
-            value={apellido}
-            onChange={e => setApellido(e.target.value)}
-            maxLength={50}
-            disabled={submitting}
-            className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
-          />
-        </div>
+        {/* Si hay sesión: muestra el autor automático (no editable) */}
+        {isLogged ? (
+          <div className="flex items-center gap-2 mb-2 px-2.5 py-1.5 bg-white rounded-lg border border-brand-200">
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[10px] shrink-0"
+              style={{ backgroundColor: avatarColor(sessionName) }}
+            >
+              {initials(sessionNombre, sessionApellido) || <UserIcon size={11} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-gray-400 leading-none">Comentando como</p>
+              <p className="text-xs font-bold text-gray-800 truncate">{sessionName}</p>
+            </div>
+            <span className="text-[9px] font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+              {session?.role === 'admin' ? 'Admin' : 'Sesión activa'}
+            </span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="Nombre"
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              maxLength={50}
+              disabled={submitting}
+              className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
+            />
+            <input
+              type="text"
+              placeholder="Apellido"
+              value={apellido}
+              onChange={e => setApellido(e.target.value)}
+              maxLength={50}
+              disabled={submitting}
+              className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
+            />
+          </div>
+        )}
         <textarea
           placeholder="Escribe tu comentario..."
           value={contenido}
@@ -209,6 +246,15 @@ export function CommentsSection({ initiativeId }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <p className="text-xs font-bold text-gray-900">{fullName}</p>
+                  {(c as any).authenticated && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[9px] font-bold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded-full"
+                      title={(c as any).userRole === 'admin' ? 'Verificado: Administrador' : 'Verificado: Equipo TA'}
+                    >
+                      <CheckCircle2 size={9} />
+                      {(c as any).userRole === 'admin' ? 'Admin' : 'Verificado'}
+                    </span>
+                  )}
                   <span className="text-[10px] text-gray-400">· {timeAgo(c.createdAt)}</span>
 
                   {/* Admin: botón borrar / confirmación */}
