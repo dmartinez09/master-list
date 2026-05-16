@@ -15,25 +15,10 @@ import { applyFilters, EMPTY_FILTERS } from '../utils/filters';
 import { updateInitiative } from '../lib/api';
 import type { Filters, Iniciativa } from '../types';
 import { EstadoBadge } from '../components/ui/Badge';
-import { LayoutGrid, Table2, Download, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Settings2, X, GripVertical, Loader2, CheckCircle2, PlusCircle } from 'lucide-react';
+import { LayoutGrid, Table2, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Settings2, X, GripVertical, Loader2, CheckCircle2, PlusCircle } from 'lucide-react';
 import { PortfolioTour } from '../components/ui/Tour';
 
 type ViewMode = 'pipeline' | 'table';
-
-function exportCSV(data: Iniciativa[]) {
-  const cols: (keyof Iniciativa)[] = [
-    'id', 'titulo', 'empresa', 'area', 'estado', 'prioridad', 'frameworkDimension',
-    'costoEstimado', 'tiempoRequerido', 'solicitante',
-  ];
-  const header = ['ID','Título','País','Área','Estado','Prioridad','Capacidad','Costo','Tiempo','Solicitante'];
-  const rows = data.map(i => cols.map(c => `"${String(i[c] ?? '').replace(/"/g, '""')}"`).join(','));
-  const csv = [header.join(','), ...rows].join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'portafolio-ta.csv'; a.click();
-  URL.revokeObjectURL(url);
-}
 
 function loadColOrder(): string[] {
   try { return JSON.parse(localStorage.getItem('ta_pipeline_cols_order') ?? 'null') ?? [...PIPELINE_ORDER]; }
@@ -100,10 +85,43 @@ export default function Portfolio() {
   const [showScrollHint, setShowScrollHint] = useState(false);
   const kanbanRef = useRef<HTMLDivElement>(null);
 
-  // Column order & visibility
+  // Column order & visibility (KANBAN)
   const [colOrder, setColOrder] = useState<string[]>(loadColOrder);
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(loadHiddenCols);
   const [showColMgr, setShowColMgr] = useState(false);
+
+  // Column order & visibility (TABLA)
+  const [tableColOrder, setTableColOrder] = useState<string[]>(loadTableColOrder);
+  const [tableHiddenCols, setTableHiddenCols] = useState<Set<string>>(loadTableHidden);
+  const [showTableColMgr, setShowTableColMgr] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('ta_table_cols_order', JSON.stringify(tableColOrder));
+  }, [tableColOrder]);
+  useEffect(() => {
+    localStorage.setItem('ta_table_cols_hidden', JSON.stringify([...tableHiddenCols]));
+  }, [tableHiddenCols]);
+
+  const toggleTableCol = (key: string) => {
+    setTableHiddenCols(prev => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+  };
+  const moveTableCol = (idx: number, dir: -1 | 1) => {
+    setTableColOrder(prev => {
+      const next = [...prev];
+      const swap = idx + dir;
+      if (swap < 0 || swap >= next.length) return prev;
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      return next;
+    });
+  };
+  const resetTableCols = () => {
+    setTableColOrder([...DEFAULT_TABLE_ORDER]);
+    setTableHiddenCols(new Set(ALL_TABLE_COLUMNS.filter(c => !c.defaultVisible).map(c => c.key)));
+  };
 
   const getTrack = () =>
     kanbanRef.current?.querySelector<HTMLElement>('.pipeline-track') ?? null;
@@ -268,15 +286,8 @@ export default function Portfolio() {
                 </button>
               )}
 
-              <button
-                onClick={() => exportCSV(filtered)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 font-medium"
-              >
-                <Download size={13} /> Exportar CSV
-              </button>
-
-              {/* Column manager button — only in Kanban */}
-              {view === 'pipeline' && (
+              {/* Column manager — disponible en ambas vistas */}
+              {view === 'pipeline' ? (
                 <div className="relative">
                   <button
                     data-tour="col-manager"
@@ -303,6 +314,34 @@ export default function Portfolio() {
                       onMove={moveColByIndex}
                       onReset={resetCols}
                       onClose={() => setShowColMgr(false)}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowTableColMgr(s => !s)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-lg font-medium transition-colors ${
+                      showTableColMgr
+                        ? 'bg-brand-600 text-white border-brand-600'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title="Mostrar/ocultar y reordenar columnas"
+                  >
+                    <Settings2 size={13} />
+                    Columnas
+                    <span className={`text-[10px] font-bold px-1 py-0.5 rounded-full ml-0.5 ${showTableColMgr ? 'bg-white/25' : 'bg-brand-100 text-brand-700'}`}>
+                      {ALL_TABLE_COLUMNS.length - tableHiddenCols.size}/{ALL_TABLE_COLUMNS.length}
+                    </span>
+                  </button>
+                  {showTableColMgr && (
+                    <TableColumnManager
+                      colOrder={tableColOrder}
+                      hiddenCols={tableHiddenCols}
+                      onToggle={toggleTableCol}
+                      onMove={moveTableCol}
+                      onReset={resetTableCols}
+                      onClose={() => setShowTableColMgr(false)}
                     />
                   )}
                 </div>
@@ -340,7 +379,12 @@ export default function Portfolio() {
                 onMoveCard={handleMoveCard}
               />
             ) : (
-              <TableView data={filtered} onSelect={setSelected} />
+              <TableView
+                data={filtered}
+                onSelect={setSelected}
+                colOrder={tableColOrder}
+                hiddenCols={tableHiddenCols}
+              />
             )}
           </div>
         </main>
@@ -725,78 +769,18 @@ function loadTableHidden(): Set<string> {
   return new Set(ALL_TABLE_COLUMNS.filter(c => !c.defaultVisible).map(c => c.key));
 }
 
-function TableView({ data, onSelect }: { data: Iniciativa[]; onSelect: (i: Iniciativa) => void }) {
-  const [colOrder, setColOrder] = useState<string[]>(loadTableColOrder);
-  const [hiddenCols, setHiddenCols] = useState<Set<string>>(loadTableHidden);
-  const [showMgr, setShowMgr] = useState(false);
+interface TableViewProps {
+  data: Iniciativa[];
+  onSelect: (i: Iniciativa) => void;
+  colOrder: string[];
+  hiddenCols: Set<string>;
+}
 
-  useEffect(() => {
-    localStorage.setItem('ta_table_cols_order', JSON.stringify(colOrder));
-  }, [colOrder]);
-  useEffect(() => {
-    localStorage.setItem('ta_table_cols_hidden', JSON.stringify([...hiddenCols]));
-  }, [hiddenCols]);
-
-  const toggleCol = (key: string) => {
-    setHiddenCols(prev => {
-      const n = new Set(prev);
-      n.has(key) ? n.delete(key) : n.add(key);
-      return n;
-    });
-  };
-
-  const moveColumn = (idx: number, dir: -1 | 1) => {
-    setColOrder(prev => {
-      const next = [...prev];
-      const swap = idx + dir;
-      if (swap < 0 || swap >= next.length) return prev;
-      [next[idx], next[swap]] = [next[swap], next[idx]];
-      return next;
-    });
-  };
-
-  const resetCols = () => {
-    setColOrder([...DEFAULT_TABLE_ORDER]);
-    setHiddenCols(new Set(ALL_TABLE_COLUMNS.filter(c => !c.defaultVisible).map(c => c.key)));
-  };
-
+function TableView({ data, onSelect, colOrder, hiddenCols }: TableViewProps) {
   const visibleCols = colOrder.filter(k => !hiddenCols.has(k)).map(k => COL_MAP.get(k)!).filter(Boolean);
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-      {/* Toolbar de columnas */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/60">
-        <span className="text-[11px] text-gray-500">
-          <strong className="text-gray-800">{visibleCols.length}</strong> de {ALL_TABLE_COLUMNS.length} columnas visibles · {data.length} hallazgos
-        </span>
-        <div className="relative">
-          <button
-            onClick={() => setShowMgr(o => !o)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-lg font-medium transition-colors ${
-              showMgr ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <Settings2 size={13} />
-            Columnas
-            {hiddenCols.size > 0 && (
-              <span className={`text-[10px] font-bold px-1 py-0.5 rounded-full ml-0.5 ${showMgr ? 'bg-white/25' : 'bg-brand-100 text-brand-700'}`}>
-                {ALL_TABLE_COLUMNS.length - hiddenCols.size}
-              </span>
-            )}
-          </button>
-          {showMgr && (
-            <TableColumnManager
-              colOrder={colOrder}
-              hiddenCols={hiddenCols}
-              onToggle={toggleCol}
-              onMove={moveColumn}
-              onReset={resetCols}
-              onClose={() => setShowMgr(false)}
-            />
-          )}
-        </div>
-      </div>
-
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
