@@ -41,11 +41,19 @@ export function frameworkColor(name: string) {
   return FRAMEWORK_BY_NAME[name] ?? FRAMEWORK_DIMENSIONS[1];
 }
 
+const FRAMEWORK_NAMES = new Set<string>(FRAMEWORK_DIMENSIONS.map(d => d.name));
+
 /**
  * Mapea cualquier iniciativa del Master List a una de las 4 dimensiones del framework.
- * Estrategia: keywords IA primero (siempre prevalecen), luego categoría.
+ * Estrategia: si admin ya fijó la dimensión a un valor del framework, esa gana;
+ * si no, keywords IA primero, luego categoría.
  */
 export function mapToFramework(i: Iniciativa): FrameworkDim {
+  // 0) Override explícito del admin (campo dimension == nombre exacto del framework)
+  if (i.dimension && FRAMEWORK_NAMES.has(String(i.dimension).trim())) {
+    return String(i.dimension).trim() as FrameworkDim;
+  }
+
   const text = `${i.titulo ?? ''} ${i.descripcion ?? ''} ${i.objetivos ?? ''}`.toLowerCase();
 
   // 1) Keywords de IA tienen prioridad absoluta

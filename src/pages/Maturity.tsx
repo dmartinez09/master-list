@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts';
 import { Navbar } from '../components/ui/Navbar';
 import { useCountUp } from '../hooks/useCountUp';
+import { useInitiatives } from '../contexts/InitiativesContext';
+import { mapToFramework } from '../utils/framework';
 import {
   Database, Cpu, Shield, Brain, TrendingUp, ExternalLink, ChevronRight,
-  Calendar, Award, AlertCircle, CheckCircle2,
+  Calendar, Award, AlertCircle, CheckCircle2, RefreshCcw,
 } from 'lucide-react';
+import type { Iniciativa } from '../types';
 
 /* ═══════════════════════════════════════════════════════════════
    FRAMEWORK DE MADUREZ — combinación de modelos reconocidos
@@ -66,7 +69,9 @@ const NIVELES = [
   },
 ];
 
-const DIMENSIONES = [
+/** Datos base por dimensión (estáticos: framework + descripciones).
+ *  Los scores actual/meta se calculan dinámicamente desde las iniciativas. */
+const DIMENSION_BASE = [
   {
     id: 'datos',
     nombre: 'Datos y Analítica',
@@ -74,12 +79,10 @@ const DIMENSIONES = [
     icon: Database,
     color: '#2563eb',
     light: '#eff6ff',
-    actual: 1.5,
-    meta12m: 2.5,
-    meta24m: 3.3,
+    fallbackActual: 1.5,
+    fallbackMeta: 3.3,
     hoy: 'Datos en silos por país y por ERP. Excel como fuente de verdad. Sin diccionario único de SKU/cliente. Reportería manual con criterios distintos por país.',
     proximoNivel: 'Datawarehouse corporativo único alimentado de SAP, Salesforce y Siesa. Power BI sobre datos confiables. KPIs estandarizados de sell-in/sell-out entre Perú, Chile, Colombia. Diccionario de datos publicado.',
-    iniciativasClave: ['ID-113 Datawarehouse SAP (Finalizado)', 'ID-053 Evaluación DW Siesa', 'ID-110 Reportería Cartera Directorio', 'ID-001 Diagnóstico riesgo Excel', 'ID-070 Reportería Siesa Q4', 'ID-075 Tableros OTIF'],
   },
   {
     id: 'apps',
@@ -88,12 +91,10 @@ const DIMENSIONES = [
     icon: Cpu,
     color: '#0891b2',
     light: '#ecfeff',
-    actual: 1.8,
-    meta12m: 2.7,
-    meta24m: 3.5,
+    fallbackActual: 1.8,
+    fallbackMeta: 3.5,
     hoy: 'ERPs heterogéneos (SAP B1 en Andina recién, Lanix Chile, Siesa Colombia). Salesforce relanzado en algunos países. Integraciones manuales. Sin arquitectura corporativa documentada.',
     proximoNivel: 'SAP B1 estabilizado y replicable. Salesforce relanzado por país. Integraciones Seidor-Lanix-Siesa funcionales con APIs. Cloud-first para nuevas capacidades. Roadmap claro de consolidación.',
-    iniciativasClave: ['ID-002 SAP B1 Andina (75%+)', 'ID-005/029 Salesforce relanzado', 'ID-046 Integración Seidor-Lanix', 'ID-150 Facturación electrónica', 'ID-141 Cotizador Colombia'],
   },
   {
     id: 'seguridad',
@@ -102,12 +103,10 @@ const DIMENSIONES = [
     icon: Shield,
     color: '#dc2626',
     light: '#fef2f2',
-    actual: 1.5,
-    meta12m: 2.5,
-    meta24m: 3.0,
+    fallbackActual: 1.5,
+    fallbackMeta: 3.0,
     hoy: 'NIST CSF Tier 1 (Partial). Antivirus heterogéneo, sin CISO, respaldos SharePoint sin protocolo, sin política formal de TI publicada. Cumplimiento de Hab. Datos Perú y Ley 1581 Colombia parcial.',
     proximoNivel: 'NIST CSF Tier 3 (Repeatable). M365 Defender corporativo, Política TI 2026 firmada, comité país operativo, MFA universal, respaldos auditables. Riesgo cibernético reportado al Directorio.',
-    iniciativasClave: ['ID-105 M365 Defender', 'ID-108 Respaldo SharePoint', 'ID-091 Assessment SharePoint', 'ID-146 Política TI 2026', 'ID-127 Anexo compras', 'ID-152 Cerradura digital'],
   },
   {
     id: 'ia',
@@ -116,29 +115,108 @@ const DIMENSIONES = [
     icon: Brain,
     color: '#7c3aed',
     light: '#f5f3ff',
-    actual: 1.2,
-    meta12m: 2.2,
-    meta24m: 3.0,
+    fallbackActual: 1.2,
+    fallbackMeta: 3.0,
     hoy: 'Gartner AI: nivel "Awareness". IA usada de forma aislada (Perplexity en Asuntos Regulatorios). Sin Comité IA formal aún operativo. Recurso de datos recién incorporado.',
     proximoNivel: 'Gartner AI: nivel "Operational". Comité IA del Grupo activo, suscripciones consolidadas, agente Copilot Studio en producción para soporte TI, capacitaciones por área, marco ético-legal aplicado.',
-    iniciativasClave: ['ID-092 Comité Directivo IA', 'ID-099 Capacitación IA Reg.', 'ID-118 Perplexity (Finalizado)', 'ID-107 Agente Copilot soporte', 'ID-088 Analista Datos (Finalizado)', 'ID-006 Modelo cambio IA'],
   },
 ];
 
-const ACTUAL_GLOBAL = (DIMENSIONES.reduce((s, d) => s + d.actual, 0) / DIMENSIONES.length);
-const META_12M = (DIMENSIONES.reduce((s, d) => s + d.meta12m, 0) / DIMENSIONES.length);
-const META_24M = (DIMENSIONES.reduce((s, d) => s + d.meta24m, 0) / DIMENSIONES.length);
+/** Mapa estado → progreso (0 a 1) usado para calcular cuánto contribuye una iniciativa al actual */
+const STATE_PROGRESS: Record<string, number> = {
+  'Finalizado': 1.0,
+  'Aprobación Final': 0.95,
+  'En proceso 75% - +': 0.85,
+  'En proceso 51% - 75%': 0.65,
+  'En proceso 25% - 50%': 0.40,
+  'En proceso 0% - 25%': 0.15,
+  'Próximo (Backlog listo)': 0,
+  'Solicitado / A validar': 0,
+  'En Espera de TI / TA': 0,
+  'Bloqueado': 0,
+  'Fuera del Plan': 0,
+};
 
-/* Benchmarks de industria — fuentes: Gartner ITScore 2024, McKinsey Rewired 2024, Deloitte Digital Maturity Index */
-const BENCHMARKS = [
-  { label: 'Point hoy',                   value: ACTUAL_GLOBAL,      color: '#dc2626', annotation: 'Punto de partida' },
-  { label: 'Promedio Latam (CPG/Distribución)', value: 2.0,            color: '#d97706', annotation: 'Gartner Latam 2024' },
-  { label: 'Promedio Global (CPG)',       value: 2.4,                color: '#ca8a04', annotation: 'McKinsey Rewired 2024' },
-  { label: 'Point meta 12 meses',         value: META_12M,           color: '#2563eb', annotation: 'Cierre 2026' },
-  { label: 'Point meta 24 meses',         value: META_24M,           color: '#7c3aed', annotation: 'Cierre 2027' },
-  { label: 'Top 25% Global',              value: 3.7,                color: '#16a34a', annotation: 'Líderes regionales' },
-  { label: 'Líderes mundiales',           value: 4.5,                color: '#15803d', annotation: 'Coca-Cola, P&G, Unilever' },
-];
+/** Tipo extendido — cada dimensión con scores dinámicos */
+interface DimensionWithScores {
+  id: string;
+  nombre: string;
+  framework: string;
+  icon: any;
+  color: string;
+  light: string;
+  hoy: string;
+  proximoNivel: string;
+  /** Score actual basado en progreso × objetivo de iniciativas (1-5) */
+  actual: number;
+  /** Score objetivo promedio de las iniciativas asignadas a esta dim */
+  meta24m: number;
+  /** Meta intermedia 12m — interpolación entre actual y meta24m */
+  meta12m: number;
+  /** Cuántas iniciativas contribuyen a esta dimensión */
+  iniciativasCount: number;
+  /** IDs de las iniciativas clave (top 6 por nivel objetivo + Finalizadas primero) */
+  iniciativasClave: string[];
+}
+
+/**
+ * Calcula scores dinámicos por dimensión a partir de las iniciativas.
+ * - actual = mean(1 + (objetivo - 1) × progress) entre iniciativas con objetivo asignado
+ * - meta24m = mean(objetivo) entre iniciativas con objetivo asignado
+ * - meta12m = interpolación lineal (60% del camino actual→meta)
+ */
+function computeMaturity(initiatives: Iniciativa[]): DimensionWithScores[] {
+  return DIMENSION_BASE.map(base => {
+    // Iniciativas que aportan a esta dimensión
+    const aportes = initiatives.filter(i => mapToFramework(i) === base.nombre);
+
+    // Solo las que tienen objetivo válido (1-5) computan en el score
+    const conObjetivo = aportes
+      .map(i => {
+        const obj = parseInt(String(i.nivelMadurez ?? '').replace(/[^0-9]/g, ''), 10);
+        return { i, obj };
+      })
+      .filter(x => x.obj >= 1 && x.obj <= 5);
+
+    let actual = base.fallbackActual;
+    let meta24m = base.fallbackMeta;
+
+    if (conObjetivo.length > 0) {
+      let sumActual = 0, sumMeta = 0;
+      for (const { i, obj } of conObjetivo) {
+        const progress = STATE_PROGRESS[i.estado] ?? 0;
+        // Modelo: cada iniciativa lleva al Grupo desde 1 hacia su objetivo
+        // contribución actual = 1 + (obj - 1) × progreso
+        sumActual += 1 + (obj - 1) * progress;
+        sumMeta += obj;
+      }
+      actual = sumActual / conObjetivo.length;
+      meta24m = sumMeta / conObjetivo.length;
+    }
+
+    const meta12m = actual + (meta24m - actual) * 0.6;
+
+    // Top 6 iniciativas clave: Finalizadas primero, luego por progreso desc
+    const claves = [...aportes]
+      .sort((a, b) => {
+        const pa = STATE_PROGRESS[a.estado] ?? 0;
+        const pb = STATE_PROGRESS[b.estado] ?? 0;
+        if (pa !== pb) return pb - pa;
+        return String(a.id).localeCompare(String(b.id));
+      })
+      .slice(0, 8)
+      .map(i => `${i.id} ${i.titulo?.slice(0, 50) ?? ''}${(i.titulo?.length ?? 0) > 50 ? '…' : ''}`);
+
+    return {
+      ...base,
+      actual: Math.round(actual * 10) / 10,
+      meta24m: Math.round(meta24m * 10) / 10,
+      meta12m: Math.round(meta12m * 10) / 10,
+      iniciativasCount: aportes.length,
+      iniciativasClave: claves,
+    };
+  });
+}
 
 const ROADMAP = [
   {
@@ -189,13 +267,22 @@ const ROADMAP = [
 ═══════════════════════════════════════════════════════════════ */
 
 /* ─── Score Card hero ─────────────────────────────────────── */
-function CompositeScoreHero() {
-  const score = useCountUp(Math.round(ACTUAL_GLOBAL * 10), 1500, 200) / 10;
-  const target = useCountUp(Math.round(META_24M * 10), 1500, 700) / 10;
+function CompositeScoreHero({ actualGlobal, meta12m, meta24m }: { actualGlobal: number; meta12m: number; meta24m: number }) {
+  const score = useCountUp(Math.round(actualGlobal * 10), 1500, 200) / 10;
+  const target = useCountUp(Math.round(meta24m * 10), 1500, 700) / 10;
 
-  // Position on 0-5 axis (percentage)
-  const positionActual = (ACTUAL_GLOBAL / 5) * 100;
-  const positionMeta = (META_24M / 5) * 100;
+  const positionActual = (actualGlobal / 5) * 100;
+  const positionMeta = (meta24m / 5) * 100;
+  const actualNivel = Math.max(1, Math.min(5, Math.round(actualGlobal)));
+  const meta12Nivel = Math.max(1, Math.min(5, Math.round(meta12m)));
+  const meta24Nivel = Math.max(1, Math.min(5, Math.round(meta24m)));
+  const nivelNames: Record<number, string> = {
+    1: 'Inicial / Reactivo',
+    2: 'En Desarrollo',
+    3: 'Definido / Funcional',
+    4: 'Gestionado',
+    5: 'Optimizado',
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -209,7 +296,7 @@ function CompositeScoreHero() {
             <span className="text-lg text-red-500 font-semibold">/ 5.0</span>
           </div>
           <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-[10px] font-bold mb-2">
-            <AlertCircle size={11} /> Nivel 1 · Inicial / Reactivo
+            <AlertCircle size={11} /> Nivel {actualNivel} · {nivelNames[actualNivel]}
           </div>
           <p className="text-xs text-red-900 leading-relaxed">
             Por debajo del promedio Latam (2.0) y del promedio global de la industria CPG (2.4).
@@ -221,11 +308,11 @@ function CompositeScoreHero() {
         <div className="p-6">
           <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-2">Compromiso 12 meses</p>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-6xl font-black text-blue-700">{META_12M.toFixed(1)}</span>
+            <span className="text-6xl font-black text-blue-700">{meta12m.toFixed(1)}</span>
             <span className="text-lg text-blue-500 font-semibold">/ 5.0</span>
           </div>
           <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold mb-2">
-            <TrendingUp size={11} /> Nivel 2 · En Desarrollo
+            <TrendingUp size={11} /> Nivel {meta12Nivel} · {nivelNames[meta12Nivel]}
           </div>
           <p className="text-xs text-blue-900 leading-relaxed">
             Alcanzar el promedio Latam y superarlo. Política TI publicada,
@@ -241,7 +328,7 @@ function CompositeScoreHero() {
             <span className="text-lg text-brand-500 font-semibold">/ 5.0</span>
           </div>
           <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold mb-2">
-            <Award size={11} /> Nivel 3 · Definido / Funcional
+            <Award size={11} /> Nivel {meta24Nivel} · {nivelNames[meta24Nivel]}
           </div>
           <p className="text-xs text-brand-900 leading-relaxed">
             Superar al promedio global. KPIs estandarizados,
@@ -257,10 +344,10 @@ function CompositeScoreHero() {
           <div className="h-3 rounded-full" style={{ background: 'linear-gradient(90deg, #dc2626 0%, #d97706 25%, #2563eb 50%, #7c3aed 75%, #00A651 100%)' }} />
           {/* Markers */}
           <div className="absolute top-0 -mt-1 w-5 h-5 rounded-full bg-white border-4 border-red-600 shadow-md transition-all duration-1000" style={{ left: `calc(${positionActual}% - 10px)` }}>
-            <span className="absolute top-7 left-1/2 -translate-x-1/2 text-[10px] font-bold text-red-700 whitespace-nowrap">HOY {ACTUAL_GLOBAL.toFixed(1)}</span>
+            <span className="absolute top-7 left-1/2 -translate-x-1/2 text-[10px] font-bold text-red-700 whitespace-nowrap">HOY {actualGlobal.toFixed(1)}</span>
           </div>
           <div className="absolute top-0 -mt-1 w-5 h-5 rounded-full bg-white border-4 border-brand-600 shadow-md transition-all duration-1000" style={{ left: `calc(${positionMeta}% - 10px)` }}>
-            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-brand-700 whitespace-nowrap">META {META_24M.toFixed(1)}</span>
+            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-brand-700 whitespace-nowrap">META {meta24m.toFixed(1)}</span>
           </div>
         </div>
         <div className="flex justify-between mt-9 text-[10px] text-gray-400 font-medium">
@@ -272,9 +359,19 @@ function CompositeScoreHero() {
 }
 
 /* ─── Industry Benchmark Bar ──────────────────────────────── */
-function IndustryBenchmark() {
+function IndustryBenchmark({ actualGlobal, meta12m, meta24m }: { actualGlobal: number; meta12m: number; meta24m: number }) {
   const [animated, setAnimated] = useState(false);
   useEffect(() => { const t = setTimeout(() => setAnimated(true), 400); return () => clearTimeout(t); }, []);
+
+  const BENCHMARKS = [
+    { label: 'Point hoy',                   value: actualGlobal, color: '#dc2626', annotation: 'Calculado en vivo desde el portafolio' },
+    { label: 'Promedio Latam (CPG/Distribución)', value: 2.0,    color: '#d97706', annotation: 'Gartner Latam 2024' },
+    { label: 'Promedio Global (CPG)',       value: 2.4,          color: '#ca8a04', annotation: 'McKinsey Rewired 2024' },
+    { label: 'Point meta 12 meses',         value: meta12m,      color: '#2563eb', annotation: 'Cierre 2026' },
+    { label: 'Point meta 24 meses',         value: meta24m,      color: '#7c3aed', annotation: 'Cierre 2027' },
+    { label: 'Top 25% Global',              value: 3.7,          color: '#16a34a', annotation: 'Líderes regionales' },
+    { label: 'Líderes mundiales',           value: 4.5,          color: '#15803d', annotation: 'Coca-Cola, P&G, Unilever' },
+  ];
 
   return (
     <div>
@@ -333,8 +430,8 @@ function IndustryBenchmark() {
 }
 
 /* ─── Radar Chart — clear and legible ───────────────────── */
-function MaturityRadar() {
-  const radarData = DIMENSIONES.map(d => ({
+function MaturityRadar({ dimensions }: { dimensions: DimensionWithScores[] }) {
+  const radarData = dimensions.map(d => ({
     dimension: d.nombre.split(' ')[0],
     fullName: d.nombre,
     'Hoy':       d.actual,
@@ -369,12 +466,12 @@ function MaturityRadar() {
 }
 
 /* ─── Dimension deep dive cards ──────────────────────────── */
-function DimensionDeepDive() {
+function DimensionDeepDive({ dimensions }: { dimensions: DimensionWithScores[] }) {
   const [expandedId, setExpandedId] = useState<string | null>('datos');
 
   return (
     <div className="space-y-3">
-      {DIMENSIONES.map(d => {
+      {dimensions.map(d => {
         const Icon = d.icon;
         const isOpen = expandedId === d.id;
         const gap = d.meta24m - d.actual;
@@ -458,7 +555,7 @@ function DimensionDeepDive() {
 }
 
 /* ─── Maturity Levels Path ─────────────────────────────── */
-function MaturityLevelsPath() {
+function MaturityLevelsPath({ actualGlobal, meta12m, meta24m }: { actualGlobal: number; meta12m: number; meta24m: number }) {
   return (
     <div>
       <p className="text-xs text-gray-600 mb-5 leading-relaxed">
@@ -468,9 +565,9 @@ function MaturityLevelsPath() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
         {NIVELES.map(n => {
-          const isCurrent = n.n === Math.floor(ACTUAL_GLOBAL) || (n.n === 1 && ACTUAL_GLOBAL < 2);
-          const isMeta12  = n.n === Math.round(META_12M);
-          const isMeta24  = n.n === Math.round(META_24M);
+          const isCurrent = n.n === Math.floor(actualGlobal) || (n.n === 1 && actualGlobal < 2);
+          const isMeta12  = n.n === Math.round(meta12m);
+          const isMeta24  = n.n === Math.round(meta24m);
           return (
             <div
               key={n.n}
@@ -551,6 +648,25 @@ function RoadmapTimeline() {
    PAGE
 ═══════════════════════════════════════════════════════════════ */
 export default function Maturity() {
+  const { initiatives, loading } = useInitiatives();
+
+  // Cálculo dinámico que reacciona cuando admin edita iniciativas
+  const dimensions = useMemo(() => computeMaturity(initiatives), [initiatives]);
+  const actualGlobal = useMemo(
+    () => dimensions.reduce((s, d) => s + d.actual, 0) / dimensions.length,
+    [dimensions]
+  );
+  const meta24m = useMemo(
+    () => dimensions.reduce((s, d) => s + d.meta24m, 0) / dimensions.length,
+    [dimensions]
+  );
+  const meta12m = useMemo(
+    () => actualGlobal + (meta24m - actualGlobal) * 0.6,
+    [actualGlobal, meta24m]
+  );
+
+  const totalAporta = dimensions.reduce((s, d) => s + d.iniciativasCount, 0);
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar breadcrumb={['Inicio', 'Dashboard de Madurez Tecnológica']} />
@@ -562,19 +678,30 @@ export default function Maturity() {
           <div className="flex items-center gap-2 mb-2">
             <Award size={14} className="text-brand-300" />
             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-300">Diagnóstico de Madurez Tecnológica · Modelo CMMI · Gartner ITScore · NIST CSF</span>
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-brand-300/80">
+              <RefreshCcw size={10} /> Dinámico desde el portafolio
+            </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-black mb-3 leading-tight">
-            Estamos en Nivel 1.5 de 5. La meta es Nivel 3.3 al 2027.
+            Estamos en Nivel {actualGlobal.toFixed(1)} de 5. La meta es Nivel {meta24m.toFixed(1)} al 2027.
           </h1>
           <p className="text-brand-200 text-sm md:text-base max-w-3xl leading-relaxed">
-            Esta es la posición real del Grupo Point evaluada con los modelos de madurez más reconocidos de la industria
-            (CMMI, Gartner ITScore, NIST CSF, DAMA-DMBOK, Gartner AI Maturity). Los benchmarks vienen de reportes públicos
-            de Gartner, McKinsey y Deloitte. La brecha es clara y cerrarla es el plan.
+            Esta es la posición real del Grupo Point. Los scores se calculan en vivo a partir
+            de las iniciativas del portafolio: por cada hallazgo cuenta su <em>contribución estratégica</em> y su <em>nivel de madurez objetivo</em>
+            (asignados por el administrador), ponderados por el progreso actual.
+            {totalAporta > 0 && <> <strong className="text-white">{totalAporta}</strong> iniciativas contribuyen al cálculo.</>}
           </p>
         </div>
 
+        {loading && initiatives.length === 0 && (
+          <div className="text-center py-12">
+            <span className="inline-block w-8 h-8 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
+            <p className="text-xs text-gray-400 mt-3">Calculando madurez desde el portafolio…</p>
+          </div>
+        )}
+
         {/* COMPOSITE SCORE */}
-        <CompositeScoreHero />
+        <CompositeScoreHero actualGlobal={actualGlobal} meta12m={meta12m} meta24m={meta24m} />
 
         {/* INDUSTRY BENCHMARK */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -585,7 +712,7 @@ export default function Maturity() {
               Benchmark con empresas similares de consumo masivo y distribución en Latam y a nivel global.
               La barra del Grupo Point hoy queda visiblemente por debajo del promedio regional.
             </p>
-            <IndustryBenchmark />
+            <IndustryBenchmark actualGlobal={actualGlobal} meta12m={meta12m} meta24m={meta24m} />
           </div>
         </div>
 
@@ -599,7 +726,7 @@ export default function Maturity() {
                 4 dimensiones críticas según frameworks reconocidos. Rojo: hoy. Verde punteado: meta 2027.
                 La distancia entre ambos es la transformación a ejecutar.
               </p>
-              <MaturityRadar />
+              <MaturityRadar dimensions={dimensions} />
             </div>
           </div>
 
@@ -610,7 +737,7 @@ export default function Maturity() {
               <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
                 Clic en cada dimensión para ver el estado real, el próximo nivel concreto y las iniciativas del Master List que lo construyen.
               </p>
-              <DimensionDeepDive />
+              <DimensionDeepDive dimensions={dimensions} />
             </div>
           </div>
         </div>
@@ -620,7 +747,7 @@ export default function Maturity() {
           <div className="h-1" style={{ background: 'linear-gradient(90deg, #dc2626, #d97706, #2563eb, #7c3aed, #00A651)' }} />
           <div className="p-5">
             <h3 className="text-sm font-bold text-gray-900 mb-1">El camino: los 5 niveles de madurez tecnológica</h3>
-            <MaturityLevelsPath />
+            <MaturityLevelsPath actualGlobal={actualGlobal} meta12m={meta12m} meta24m={meta24m} />
           </div>
         </div>
 

@@ -623,20 +623,81 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
           {/* 5. Contribución estratégica */}
           <Section title="Contribución Estratégica" icon={Target}>
             <div className="grid grid-cols-1 gap-3">
-              <div className="border border-gray-100 rounded-xl p-3">
-                <p className="text-xs font-semibold text-gray-500 mb-1">
-                  Capacidad estratégica que construye
-                  {fwDef && <span className="ml-1 text-[10px] text-gray-400 italic">· {fwDef.framework}</span>}
-                </p>
-                <p className="text-sm font-bold" style={{ color: fwDef?.color ?? '#1f2937' }}>{fwName}</p>
-                {fwDef && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{fwDef.descripcion}</p>}
-              </div>
 
-              <div className="border border-gray-100 rounded-xl p-3">
-                <p className="text-xs font-semibold text-gray-500 mb-1">Madurez Objetivo</p>
-                <p className="text-lg font-black text-brand-700">{madurezNum > 0 ? `Nv. ${madurezNum}` : i.nivelMadurez || '—'}</p>
-                {madurezDef && <p className="text-[10px] text-gray-500">{madurezDef.nombre}</p>}
-              </div>
+              {/* Vista normal (no-admin o admin sin edit) */}
+              {!edit && (
+                <>
+                  <div className="border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-gray-500 mb-1">
+                      Capacidad estratégica que construye
+                      {fwDef && <span className="ml-1 text-[10px] text-gray-400 italic">· {fwDef.framework}</span>}
+                      {isAdmin && (
+                        <span className="ml-1 text-[9px] text-amber-600 italic">· solo admin puede cambiarla</span>
+                      )}
+                    </p>
+                    <p className="text-sm font-bold" style={{ color: fwDef?.color ?? '#1f2937' }}>{fwName}</p>
+                    {fwDef && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{fwDef.descripcion}</p>}
+                  </div>
+
+                  <div className="border border-gray-100 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-gray-500 mb-1">
+                      Madurez Objetivo (escala 1-5)
+                      {isAdmin && (
+                        <span className="ml-1 text-[9px] text-amber-600 italic">· solo admin puede cambiarla</span>
+                      )}
+                    </p>
+                    <p className="text-lg font-black text-brand-700">{madurezNum > 0 ? `Nivel ${madurezNum}` : (i.nivelMadurez || <span className="text-gray-400 text-sm italic">Sin asignar</span>)}</p>
+                    {madurezDef && <p className="text-[10px] text-gray-500">{madurezDef.nombre}</p>}
+                  </div>
+                </>
+              )}
+
+              {/* Modo edición (admin) — dropdowns explícitos */}
+              {edit && isAdmin && (
+                <>
+                  <div className="border border-amber-300 bg-amber-50/30 rounded-xl p-3">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1.5 block">
+                      Contribución estratégica
+                    </label>
+                    <select
+                      value={(draft.dimension as string) ?? (FRAMEWORK_DIMENSIONS.find(d => d.name === fwName)?.name ?? '')}
+                      onChange={e => setDraft({ ...draft, dimension: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-amber-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
+                    >
+                      <option value="">— Sin contribución específica (se derivará automático) —</option>
+                      {FRAMEWORK_DIMENSIONS.map(d => (
+                        <option key={d.name} value={d.name}>
+                          {d.name} ({d.framework})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-amber-600 mt-1 leading-relaxed">
+                      Determina a qué capacidad del framework de madurez aporta este hallazgo.
+                    </p>
+                  </div>
+
+                  <div className="border border-amber-300 bg-amber-50/30 rounded-xl p-3">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1.5 block">
+                      Nivel de madurez objetivo
+                    </label>
+                    <select
+                      value={(draft.nivelMadurez as string) ?? (madurezNum > 0 ? String(madurezNum) : '')}
+                      onChange={e => setDraft({ ...draft, nivelMadurez: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-amber-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
+                    >
+                      <option value="">— Sin objetivo asignado —</option>
+                      <option value="1">Nivel 1 · Inicial / Reactivo</option>
+                      <option value="2">Nivel 2 · En Desarrollo / Repetible</option>
+                      <option value="3">Nivel 3 · Definido / Funcional</option>
+                      <option value="4">Nivel 4 · Gestionado / Cuantitativo</option>
+                      <option value="5">Nivel 5 · Optimizado / Socio del Negocio</option>
+                    </select>
+                    <p className="text-[10px] text-amber-600 mt-1 leading-relaxed">
+                      A qué nivel llevará el Grupo al completarse. Afecta el score promedio del dashboard de Madurez.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </Section>
 
