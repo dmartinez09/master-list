@@ -645,16 +645,164 @@ function DraggableCard({
 }
 
 /* ── Table view ─────────────────────────────────────────────────── */
+
+/** Columnas disponibles para la tabla. `key` es estable (para localStorage); `render` opcional. */
+interface TableCol {
+  key: string;
+  label: string;
+  /** Por defecto, qué columnas vienen visibles */
+  defaultVisible: boolean;
+  render: (i: Iniciativa) => React.ReactNode;
+  /** Ancho aproximado en la celda */
+  width?: string;
+}
+
+const ALL_TABLE_COLUMNS: TableCol[] = [
+  { key: 'id',                label: 'ID',            defaultVisible: true,  render: i => <span className="font-mono font-bold text-brand-600">{i.id}</span> },
+  { key: 'titulo',            label: 'Título',        defaultVisible: true,  render: i => <span className="block truncate font-medium text-gray-800" title={i.titulo}>{i.titulo}</span>, width: 'max-w-[260px]' },
+  { key: 'empresa',           label: 'País',          defaultVisible: true,  render: i => <span className="text-gray-600 whitespace-nowrap">{i.empresa}</span> },
+  { key: 'area',              label: 'Área',          defaultVisible: true,  render: i => <span className="text-gray-600 whitespace-nowrap">{i.area}</span> },
+  { key: 'estado',            label: 'Estado',        defaultVisible: true,  render: i => <EstadoBadge label={i.estado} /> },
+  { key: 'prioridad',         label: 'Prioridad',     defaultVisible: true,  render: i => <span className="text-gray-700 font-semibold">{i.prioridad}</span> },
+  { key: 'frameworkDimension', label: 'Capacidad',    defaultVisible: true,  render: i => <span className="text-gray-600 whitespace-nowrap max-w-[140px] truncate inline-block">{i.frameworkDimension}</span> },
+  { key: 'costoEstimado',     label: 'Costo',         defaultVisible: true,  render: i => <span className="text-gray-600 whitespace-nowrap">{i.costoEstimado}</span> },
+  { key: 'solicitante',       label: 'Solicitante',   defaultVisible: true,  render: i => <span className="text-gray-500 max-w-[140px] truncate inline-block">{i.solicitante}</span> },
+
+  // Adicionales (ocultas por defecto)
+  { key: 'tipo',              label: 'Tipo',          defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.tipo}</span> },
+  { key: 'subArea',           label: 'Sub Área',      defaultVisible: false, render: i => <span className="text-gray-600 max-w-[160px] truncate inline-block">{i.subArea}</span> },
+  { key: 'categoria',         label: 'Categoría',     defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap max-w-[160px] truncate inline-block">{(i as any).categoria}</span> },
+  { key: 'complejidad',       label: 'Complejidad',   defaultVisible: false, render: i => <span className="text-gray-600">{i.complejidad}</span> },
+  { key: 'tiempoRequerido',   label: 'Tiempo',        defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.tiempoRequerido}</span> },
+  { key: 'fechaInicioProy',   label: 'Inicio proyectado', defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.fechaInicioProy}</span> },
+  { key: 'fechaInicioReal',   label: 'Inicio real',   defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.fechaInicioReal}</span> },
+  { key: 'fechaTerminoReal',  label: 'Término real',  defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.fechaTerminoReal}</span> },
+  { key: 'costoReal',         label: 'Costo real',    defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.costoReal}</span> },
+  { key: 'ahorro',            label: 'Ahorro estimado', defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.ahorro}</span> },
+  { key: 'dimension',         label: 'Dimensión (orig.)', defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap max-w-[160px] truncate inline-block">{i.dimension}</span> },
+  { key: 'nivelMadurez',      label: 'Madurez',       defaultVisible: false, render: i => <span className="text-gray-600 whitespace-nowrap">{i.nivelMadurez}</span> },
+  { key: 'sistemas',          label: 'Sistemas',      defaultVisible: false, render: i => <span className="text-gray-600 max-w-[200px] truncate inline-block">{i.sistemas}</span> },
+  { key: 'recursosTA',        label: 'Recursos TA',   defaultVisible: false, render: i => <span className="text-gray-600 max-w-[200px] truncate inline-block">{i.recursosTA}</span> },
+  { key: 'recursosFuera',     label: 'Recursos externos', defaultVisible: false, render: i => <span className="text-gray-600 max-w-[200px] truncate inline-block">{i.recursosFuera}</span> },
+  { key: 'attributedTo',      label: 'Atribuido a',   defaultVisible: false, render: i => <span className="text-gray-700 font-medium">{Array.isArray((i as any).attributedTo) ? (i as any).attributedTo.join(' + ') : (i as any).attributedTo ?? '—'}</span> },
+  { key: 'approvalStatus',    label: 'Aprobación',    defaultVisible: false, render: i => {
+      const s = (i as any).approvalStatus;
+      if (!s || s === 'pendiente') return <span className="text-gray-400 text-[10px] italic">pendiente</span>;
+      return s === 'aprobado'
+        ? <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full">Aprobado</span>
+        : <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded-full">A Evaluar</span>;
+    } },
+  { key: 'lastModifiedBy',    label: 'Última acción por', defaultVisible: false, render: i => <span className="text-gray-600 text-[10px]">{(i as any).lastModifiedBy ?? '—'}</span> },
+  { key: 'lastModifiedAt',    label: 'Última acción',  defaultVisible: false, render: i => {
+      const at = (i as any).lastModifiedAt;
+      if (!at) return <span className="text-gray-400">—</span>;
+      return <span className="text-gray-600 text-[10px] whitespace-nowrap">{new Date(at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>;
+    } },
+];
+
+const COL_MAP = new Map(ALL_TABLE_COLUMNS.map(c => [c.key, c]));
+const DEFAULT_TABLE_ORDER = ALL_TABLE_COLUMNS.map(c => c.key);
+const DEFAULT_TABLE_VISIBLE = new Set(ALL_TABLE_COLUMNS.filter(c => c.defaultVisible).map(c => c.key));
+
+function loadTableColOrder(): string[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem('ta_table_cols_order') ?? 'null');
+    if (Array.isArray(saved)) {
+      // Asegurar que tenga todas las cols (puede haberse extendido el set)
+      const set = new Set(saved);
+      for (const k of DEFAULT_TABLE_ORDER) if (!set.has(k)) saved.push(k);
+      return saved.filter((k: string) => COL_MAP.has(k));
+    }
+  } catch { /* ignore */ }
+  return [...DEFAULT_TABLE_ORDER];
+}
+function loadTableHidden(): Set<string> {
+  try {
+    const arr = JSON.parse(localStorage.getItem('ta_table_cols_hidden') ?? 'null');
+    if (Array.isArray(arr)) return new Set<string>(arr);
+  } catch { /* ignore */ }
+  // Por defecto, los que NO son default-visible están ocultos
+  return new Set(ALL_TABLE_COLUMNS.filter(c => !c.defaultVisible).map(c => c.key));
+}
+
 function TableView({ data, onSelect }: { data: Iniciativa[]; onSelect: (i: Iniciativa) => void }) {
-  const cols = ['ID', 'Título', 'País', 'Área', 'Estado', 'Prioridad', 'Capacidad', 'Costo', 'Solicitante'];
+  const [colOrder, setColOrder] = useState<string[]>(loadTableColOrder);
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(loadTableHidden);
+  const [showMgr, setShowMgr] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('ta_table_cols_order', JSON.stringify(colOrder));
+  }, [colOrder]);
+  useEffect(() => {
+    localStorage.setItem('ta_table_cols_hidden', JSON.stringify([...hiddenCols]));
+  }, [hiddenCols]);
+
+  const toggleCol = (key: string) => {
+    setHiddenCols(prev => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+  };
+
+  const moveColumn = (idx: number, dir: -1 | 1) => {
+    setColOrder(prev => {
+      const next = [...prev];
+      const swap = idx + dir;
+      if (swap < 0 || swap >= next.length) return prev;
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      return next;
+    });
+  };
+
+  const resetCols = () => {
+    setColOrder([...DEFAULT_TABLE_ORDER]);
+    setHiddenCols(new Set(ALL_TABLE_COLUMNS.filter(c => !c.defaultVisible).map(c => c.key)));
+  };
+
+  const visibleCols = colOrder.filter(k => !hiddenCols.has(k)).map(k => COL_MAP.get(k)!).filter(Boolean);
+
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      {/* Toolbar de columnas */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/60">
+        <span className="text-[11px] text-gray-500">
+          <strong className="text-gray-800">{visibleCols.length}</strong> de {ALL_TABLE_COLUMNS.length} columnas visibles · {data.length} hallazgos
+        </span>
+        <div className="relative">
+          <button
+            onClick={() => setShowMgr(o => !o)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-lg font-medium transition-colors ${
+              showMgr ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Settings2 size={13} />
+            Columnas
+            {hiddenCols.size > 0 && (
+              <span className={`text-[10px] font-bold px-1 py-0.5 rounded-full ml-0.5 ${showMgr ? 'bg-white/25' : 'bg-brand-100 text-brand-700'}`}>
+                {ALL_TABLE_COLUMNS.length - hiddenCols.size}
+              </span>
+            )}
+          </button>
+          {showMgr && (
+            <TableColumnManager
+              colOrder={colOrder}
+              hiddenCols={hiddenCols}
+              onToggle={toggleCol}
+              onMove={moveColumn}
+              onReset={resetCols}
+              onClose={() => setShowMgr(false)}
+            />
+          )}
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              {cols.map(c => (
-                <th key={c} className="text-left px-3 py-2.5 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{c}</th>
+              {visibleCols.map(c => (
+                <th key={c.key} className="text-left px-3 py-2.5 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{c.label}</th>
               ))}
             </tr>
           </thead>
@@ -665,17 +813,11 @@ function TableView({ data, onSelect }: { data: Iniciativa[]; onSelect: (i: Inici
                 onClick={() => onSelect(i)}
                 className={`border-b border-gray-50 cursor-pointer hover:bg-brand-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-gray-50/40'}`}
               >
-                <td className="px-3 py-2 font-mono font-bold text-brand-600">{i.id}</td>
-                <td className="px-3 py-2 font-medium text-gray-800 max-w-[220px]">
-                  <span className="block truncate" title={i.titulo}>{i.titulo}</span>
-                </td>
-                <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{i.empresa}</td>
-                <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{i.area}</td>
-                <td className="px-3 py-2 whitespace-nowrap"><EstadoBadge label={i.estado} /></td>
-                <td className="px-3 py-2 text-gray-600">{i.prioridad}</td>
-                <td className="px-3 py-2 text-gray-600 whitespace-nowrap max-w-[140px] truncate">{i.frameworkDimension}</td>
-                <td className="px-3 py-2 text-gray-600">{i.costoEstimado}</td>
-                <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate">{i.solicitante}</td>
+                {visibleCols.map(c => (
+                  <td key={c.key} className={`px-3 py-2 ${c.width ?? ''}`}>
+                    {c.render(i)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
@@ -685,6 +827,81 @@ function TableView({ data, onSelect }: { data: Iniciativa[]; onSelect: (i: Inici
             No se encontraron iniciativas con los filtros aplicados.
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Column manager para la TABLA ─────────────────────────────── */
+function TableColumnManager({
+  colOrder, hiddenCols, onToggle, onMove, onReset, onClose,
+}: {
+  colOrder: string[];
+  hiddenCols: Set<string>;
+  onToggle: (key: string) => void;
+  onMove: (idx: number, dir: -1 | 1) => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 flex flex-col max-h-[520px]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
+        <span className="text-xs font-bold text-gray-800">Columnas de la tabla</span>
+        <div className="flex items-center gap-2">
+          <button onClick={onReset} className="text-[11px] text-brand-600 hover:text-brand-800 font-semibold">
+            Restablecer
+          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-y-auto flex-1 py-1 scrollbar-thin">
+        {colOrder.map((key, idx) => {
+          const c = COL_MAP.get(key);
+          if (!c) return null;
+          const checked = !hiddenCols.has(key);
+          return (
+            <div
+              key={key}
+              className={`flex items-center gap-2 px-4 py-1.5 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
+                !checked ? 'opacity-50' : ''
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(key)}
+                className="accent-brand-500 w-3.5 h-3.5 shrink-0 cursor-pointer"
+              />
+              <span className="flex-1 text-xs text-gray-700 leading-tight">{c.label}</span>
+              <div className="flex gap-0.5 shrink-0">
+                <button
+                  onClick={() => onMove(idx, -1)}
+                  disabled={idx === 0}
+                  className="p-1 rounded text-gray-300 hover:text-gray-600 disabled:opacity-20 transition-colors"
+                  title="Subir"
+                >
+                  <ChevronUp size={12} />
+                </button>
+                <button
+                  onClick={() => onMove(idx, 1)}
+                  disabled={idx === colOrder.length - 1}
+                  className="p-1 rounded text-gray-300 hover:text-gray-600 disabled:opacity-20 transition-colors"
+                  title="Bajar"
+                >
+                  <ChevronDown size={12} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="px-4 py-2 border-t border-gray-100 text-[10px] text-gray-400 flex items-center justify-between">
+        <span>Marca/desmarca columnas · flechas para ordenar</span>
+        <span className="text-gray-300">Guardado automático</span>
       </div>
     </div>
   );

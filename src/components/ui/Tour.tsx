@@ -191,10 +191,15 @@ const NAV_STEPS: Step[] = [
     title: 'Ejecución',
     content: 'Seguimiento del avance de iniciativas activas.',
   },
+  {
+    selector: '[data-tour="activity-bell"]',
+    title: 'Tu campana de acciones',
+    content: 'Cuando inicies sesión y empieces a aprobar, comentar o editar hallazgos, aquí verás un registro de todas tus acciones. Click para abrir el panel.',
+  },
 ];
 
 export function Tour() {
-  return <TourEngine steps={NAV_STEPS} storageKey="ta_tour_v3_done" />;
+  return <TourEngine steps={NAV_STEPS} storageKey="ta_tour_v5_done" />;
 }
 
 /* ── Tour de Portafolio — filtros y vistas ───────────────────────── */

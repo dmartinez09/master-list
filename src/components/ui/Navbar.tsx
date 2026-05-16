@@ -47,15 +47,16 @@ function iconForActivity(t: ActivityEvent['type']) {
   }
 }
 
-/** Campana con dropdown mostrando últimas acciones del usuario logueado */
-function ActivityBell() {
+/** Campana con dropdown mostrando últimas acciones del usuario logueado.
+ *  Si no hay sesión, el dropdown invita a iniciar sesión. */
+function ActivityBell({ isLogged, onLoginClick }: { isLogged: boolean; onLoginClick: () => void }) {
   const [open, setOpen] = useState(false);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !isLogged) return;
     setLoading(true);
     fetchMyActivity()
       .then(setEvents)
@@ -67,14 +68,25 @@ function ActivityBell() {
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
+  }, [open, isLogged]);
+
+  // Cerrar al click fuera (incluso sin sesión)
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
   return (
     <div className="relative" ref={ref}>
       <button
+        data-tour="activity-bell"
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-brand-200 hover:bg-brand-800 hover:text-white transition-colors border border-brand-700/50"
-        title="Mis acciones"
+        title={isLogged ? 'Mis acciones' : 'Inicia sesión para ver tus acciones'}
       >
         <Bell size={12} />
       </button>
@@ -83,11 +95,25 @@ function ActivityBell() {
         <div className="absolute right-0 top-full mt-1 w-80 bg-white text-gray-800 rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 max-h-[480px] flex flex-col">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <p className="text-xs font-bold text-gray-900">Mis acciones</p>
-            <span className="text-[10px] text-gray-400">{events.length}</span>
+            {isLogged && <span className="text-[10px] text-gray-400">{events.length}</span>}
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-thin">
-            {loading && <div className="text-center py-6"><span className="inline-block w-4 h-4 border-2 border-brand-200 border-t-brand-600 rounded-full animate-spin" /></div>}
-            {!loading && events.length === 0 && (
+            {!isLogged && (
+              <div className="p-5 text-center">
+                <Bell size={18} className="text-gray-300 mx-auto mb-2" />
+                <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
+                  Inicia sesión para registrar y ver todas tus acciones en el portafolio: aprobaciones, comentarios y ediciones.
+                </p>
+                <button
+                  onClick={() => { setOpen(false); onLoginClick(); }}
+                  className="inline-flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
+                >
+                  Iniciar sesión
+                </button>
+              </div>
+            )}
+            {isLogged && loading && <div className="text-center py-6"><span className="inline-block w-4 h-4 border-2 border-brand-200 border-t-brand-600 rounded-full animate-spin" /></div>}
+            {isLogged && !loading && events.length === 0 && (
               <p className="text-[11px] text-gray-400 italic text-center py-6 px-4">Aún no has realizado acciones. Cuando comentes, apruebes o edites un hallazgo aparecerá aquí.</p>
             )}
             <ul className="divide-y divide-gray-50">
@@ -177,8 +203,10 @@ export function Navbar({ breadcrumb }: NavbarProps) {
             <span className="hidden lg:inline">Tour</span>
           </button>
 
-          {/* Campana de actividad propia (solo si hay sesión) */}
-          {session && <ActivityBell />}
+          {/* Campana de actividad — siempre visible para que el tour pueda enfocarla.
+              Si no hay sesión, el dropdown invita a iniciar sesión. */}
+          <ActivityBell isLogged={session != null} onLoginClick={() => setLoginOpen(true)} />
+
 
           {/* Auditoría global (solo admin) */}
           {isAdmin && (
