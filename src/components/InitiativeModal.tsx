@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   X, MapPin, User, Clock, AlertTriangle, CheckCircle, Target, Zap,
   Pencil, Save, Loader2, ShieldCheck, PlusCircle, ThumbsUp, ThumbsDown,
-  Paperclip, Upload, FileText, Download, Trash2, Flame,
+  Paperclip, Upload, FileText, Download, Trash2, Flame, UserCheck, Users,
+  Sparkles,
 } from 'lucide-react';
 import type { Iniciativa } from '../types';
 import { EstadoBadge, DimensionBadge, CostoBadge } from './ui/Badge';
@@ -14,6 +15,7 @@ import { AttachmentsSection } from './AttachmentsSection';
 import { useAuth } from '../contexts/AuthContext';
 import { useInitiatives } from '../contexts/InitiativesContext';
 import { updateInitiative, createInitiative, setApproval, type ApprovalStatus } from '../lib/api';
+import { useMarkSeen } from '../hooks/useUnseen';
 
 interface Props {
   iniciativa: Iniciativa;
@@ -27,6 +29,36 @@ interface Props {
 ─────────────────────────────────────────────────────────────── */
 const PRIORIDADES = ['Urgente', 'Alta', 'Media', 'Baja'];
 const COMPLEJIDADES = ['Alta', 'Media', 'Baja'];
+
+/** Lista común de solicitantes que aparecen en la Master List. Combinada con valores únicos de la data. */
+const COMMON_REQUESTERS = [
+  'Scot von Bergen', 'Facundo Ganin', 'Marina von Bergen', 'Suldery Chaguendo',
+  'Francisco Galvez', 'Gabriel Salinas', 'Sandra Gutierrez', 'Diana Baracaldo',
+  'Yliana Calvera', 'Karina Espinosa', 'Edith Mora', 'Marco Carvalho', 'Cesar Medina',
+  'Duvan Mejía', 'Alejandra Castro', 'Katye López', 'Yeni Vargas',
+  'C-Suite',
+];
+
+/** Opciones de atribución para el globo del ticket */
+const ATTRIBUTION_OPTIONS = [
+  'Scot von Bergen',
+  'Facundo Ganin',
+  'Marina von Bergen',
+  'Suldery Chaguendo',
+  'C-Suite',
+  'Compartido',
+  'Sin asignar',
+];
+
+const AVATAR_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#16a34a', '#d97706', '#dc2626', '#db2777', '#0d9488'];
+function avatarColor(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+function initialsOf(name: string): string {
+  return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+}
 
 /** Pill destacada para mostrar prioridad en modo lectura — colores fuertes + Urgente con pulso */
 function PrioridadPill({ value }: { value?: string | null }) {
@@ -52,6 +84,80 @@ function PrioridadPill({ value }: { value?: string | null }) {
     </span>
   );
 }
+
+/** Globo de atribución del ticket — muestra a quién está atribuido el hallazgo.
+ *  Solo admin puede cambiarlo. Click abre dropdown con opciones. */
+function AttributionBadge({
+  value, canEdit, onChange,
+}: {
+  value: string | string[] | undefined;
+  canEdit: boolean;
+  onChange: (next: string) => Promise<void>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const display = Array.isArray(value) ? value.join(' + ') : (value ?? 'Sin asignar');
+  const isCSuite = display === 'C-Suite';
+  const isUnassigned = display === 'Sin asignar' || !value;
+
+  const handle = async (next: string) => {
+    setSaving(true);
+    setOpen(false);
+    try { await onChange(next); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => canEdit && setOpen(o => !o)}
+        disabled={!canEdit || saving}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ${
+          isCSuite
+            ? 'bg-violet-100 text-violet-800 border border-violet-300'
+            : isUnassigned
+              ? 'bg-gray-100 text-gray-500 border border-gray-200'
+              : 'bg-brand-100 text-brand-800 border border-brand-300'
+        } ${canEdit ? 'cursor-pointer hover:scale-105' : 'cursor-default'}`}
+        title={canEdit ? 'Click para cambiar el responsable' : `Atribuido a: ${display}`}
+      >
+        {saving
+          ? <Loader2 size={10} className="animate-spin" />
+          : isCSuite ? <Sparkles size={10} /> : <UserCheck size={10} />}
+        <span className="truncate max-w-[140px]">{display}</span>
+        {canEdit && <span className="text-[8px] opacity-60">▾</span>}
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-1 fade-in">
+          <p className="text-[9px] uppercase tracking-widest text-gray-400 px-3 py-1.5 font-bold">Atribuir a</p>
+          {ATTRIBUTION_OPTIONS.map(opt => (
+            <button
+              key={opt}
+              onClick={() => handle(opt)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-brand-50 ${opt === display ? 'bg-brand-50 font-bold text-brand-800' : 'text-gray-700'}`}
+            >
+              {opt === 'C-Suite' && <Sparkles size={11} className="inline mr-1 text-violet-600" />}
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const COSTOS = ['$0k', '<$5k', '$5–10k', '>$10k'];
 const TIPOS = ['Iniciativa corporativa', 'Proyecto', 'Tarea'];
 
@@ -177,6 +283,15 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
   const { isAdmin, session } = useAuth();
   const isManager = session != null;
   const { updateLocal, addLocal } = useInitiatives();
+  const markSeen = useMarkSeen();
+
+  // Al abrir el modal, marcar la iniciativa como vista por el usuario actual
+  useEffect(() => {
+    if (!createMode && i.id) {
+      markSeen(i.id, (i as any).lastModifiedAt ?? new Date().toISOString());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i.id, (i as any).lastModifiedAt]);
 
   // En createMode siempre arranca en edit
   const [edit, setEdit] = useState(createMode);
@@ -278,6 +393,15 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
     }
   };
 
+  const handleAttributionChange = async (next: string) => {
+    try {
+      const updated = await updateInitiative(i.id, { attributedTo: next } as any);
+      updateLocal(i.id, updated);
+    } catch (err: any) {
+      console.error('Error cambiando atribución:', err.message);
+    }
+  };
+
   const handleApproval = async (status: ApprovalStatus) => {
     setApprovalError(null);
     setSavingApproval(status);
@@ -341,6 +465,13 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
                 <span className="flex items-center gap-1"><MapPin size={11}/>{i.empresa}</span>
                 {i.area && <span>{i.area}</span>}
                 {i.solicitante && <span className="flex items-center gap-1"><User size={11}/>{i.solicitante}</span>}
+                {!createMode && (
+                  <AttributionBadge
+                    value={(i as any).attributedTo}
+                    canEdit={isAdmin}
+                    onChange={handleAttributionChange}
+                  />
+                )}
               </div>
             </div>
 
@@ -512,6 +643,27 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
           {/* 6. Esfuerzo, costos y plazos */}
           <Section title="Esfuerzo, Costos y Plazos" icon={Clock}>
             <div className="border border-gray-100 rounded-xl overflow-hidden">
+              {/* PRIMER campo: Solicitado por (lista desplegable con sugerencias + free text) */}
+              <InfoRow
+                label="Solicitado por"
+                value={edit
+                  ? (
+                    <>
+                      <input
+                        type="text"
+                        list="solicitantes-list"
+                        value={(draft.solicitante as string | undefined) ?? i.solicitante ?? ''}
+                        onChange={e => setDraft({ ...draft, solicitante: e.target.value })}
+                        placeholder="Escribe o elige…"
+                        className="w-full px-3 py-1.5 text-sm border border-amber-300 bg-amber-50/30 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      />
+                      <datalist id="solicitantes-list">
+                        {COMMON_REQUESTERS.map(r => <option key={r} value={r} />)}
+                      </datalist>
+                    </>
+                  )
+                  : (i.solicitante || <span className="text-gray-400 italic">Sin asignar</span>)}
+              />
               <InfoRow
                 label="Tipo"
                 value={edit
@@ -681,6 +833,35 @@ export function InitiativeModal({ iniciativa: i, onClose, createMode = false }: 
             </div>
           )}
         </div>
+
+        {/* Footer: encargado del ticket (sticky abajo si hay nombre) */}
+        {!createMode && !edit && (() => {
+          const lastBy = (i as any).lastModifiedBy as string | undefined;
+          const attributed = (i as any).attributedTo as string | string[] | undefined;
+          const owner = (Array.isArray(attributed) ? attributed[0] : attributed) || lastBy;
+          if (!owner || owner === 'admin' || owner === 'Sin asignar') return null;
+          return (
+            <div className="sticky bottom-0 border-t border-gray-100 bg-gradient-to-r from-brand-50/60 to-white px-5 py-3">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[10px] shrink-0"
+                  style={{ backgroundColor: avatarColor(owner) }}
+                >
+                  {initialsOf(owner)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-gray-400 leading-none">Encargado del ticket</p>
+                  <p className="text-xs font-bold text-gray-800 truncate">{owner}</p>
+                </div>
+                {(i as any).lastModifiedAt && (
+                  <span className="text-[9px] text-gray-400 whitespace-nowrap">
+                    Última acción: {new Date((i as any).lastModifiedAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Layers, Globe, BarChart2, Activity, ChevronRight,
   Lock, LogOut, ShieldCheck, HelpCircle, KeyRound, User as UserIcon,
+  Bell, MessageSquare, ThumbsUp, ThumbsDown, Pencil, PlusCircle, FileSearch,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoginModal } from '../LoginModal';
+import { fetchMyActivity, type ActivityEvent } from '../../lib/api';
 
 /** Borra los flags localStorage del tour y dispara el evento que TourEngine escucha */
 function restartTour() {
@@ -23,6 +25,97 @@ const nav = [
 ];
 
 interface NavbarProps { breadcrumb?: string[] }
+
+function timeAgoShort(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+
+function iconForActivity(t: ActivityEvent['type']) {
+  switch (t) {
+    case 'comment':  return <MessageSquare size={11} className="text-blue-500" />;
+    case 'approval': return <ThumbsUp size={11} className="text-emerald-500" />;
+    case 'update':   return <Pencil size={11} className="text-amber-500" />;
+    case 'create':   return <PlusCircle size={11} className="text-violet-500" />;
+    default:         return <Bell size={11} className="text-gray-400" />;
+  }
+}
+
+/** Campana con dropdown mostrando últimas acciones del usuario logueado */
+function ActivityBell() {
+  const [open, setOpen] = useState(false);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    fetchMyActivity()
+      .then(setEvents)
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false));
+
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-brand-200 hover:bg-brand-800 hover:text-white transition-colors border border-brand-700/50"
+        title="Mis acciones"
+      >
+        <Bell size={12} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-80 bg-white text-gray-800 rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 max-h-[480px] flex flex-col">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+            <p className="text-xs font-bold text-gray-900">Mis acciones</p>
+            <span className="text-[10px] text-gray-400">{events.length}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto scrollbar-thin">
+            {loading && <div className="text-center py-6"><span className="inline-block w-4 h-4 border-2 border-brand-200 border-t-brand-600 rounded-full animate-spin" /></div>}
+            {!loading && events.length === 0 && (
+              <p className="text-[11px] text-gray-400 italic text-center py-6 px-4">Aún no has realizado acciones. Cuando comentes, apruebes o edites un hallazgo aparecerá aquí.</p>
+            )}
+            <ul className="divide-y divide-gray-50">
+              {events.map((e, idx) => (
+                <li key={idx} className="px-3 py-2 hover:bg-gray-50">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">{iconForActivity(e.type)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-gray-700 leading-tight">
+                        <span className="font-mono font-bold text-brand-600">{e.initiativeId}</span>
+                        {' · '}
+                        {e.detail}
+                      </p>
+                      {e.initiativeTitle && (
+                        <p className="text-[10px] text-gray-400 truncate">{e.initiativeTitle}</p>
+                      )}
+                      <p className="text-[9px] text-gray-300 mt-0.5">{timeAgoShort(e.at)}</p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const AVATAR_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#16a34a', '#d97706', '#dc2626'];
 const avatarColor = (s: string) => {
@@ -83,6 +176,27 @@ export function Navbar({ breadcrumb }: NavbarProps) {
             <HelpCircle size={12} />
             <span className="hidden lg:inline">Tour</span>
           </button>
+
+          {/* Campana de actividad propia (solo si hay sesión) */}
+          {session && <ActivityBell />}
+
+          {/* Auditoría global (solo admin) */}
+          {isAdmin && (
+            <NavLink
+              to="/admin/auditoria"
+              className={({ isActive }) =>
+                `flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
+                  isActive
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-100'
+                    : 'text-amber-200 hover:bg-amber-800/40 hover:text-white border-amber-700/30'
+                }`
+              }
+              title="Auditoría: todas las acciones del sistema"
+            >
+              <FileSearch size={12} />
+              <span className="hidden lg:inline">Auditoría</span>
+            </NavLink>
+          )}
 
           {/* Admin badge */}
           {isAdmin && (

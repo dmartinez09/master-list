@@ -233,3 +233,26 @@ export function deleteAttachment(initiativeId: string, attachmentId: string): Pr
     method: 'DELETE',
   });
 }
+
+/* ─── Activity feed (auditoría) ──────────────────────────── */
+
+export type ActivityType = 'create' | 'update' | 'approval' | 'comment';
+
+export interface ActivityEvent {
+  type: ActivityType;
+  initiativeId: string;
+  initiativeTitle?: string;
+  by: string;
+  byRole?: 'admin' | 'manager';
+  at: string;
+  detail?: string;
+  meta?: Record<string, any>;
+}
+
+export function fetchAdminActivity(): Promise<ActivityEvent[]> {
+  return http<ActivityEvent[]>('/admin/activity');
+}
+
+export function fetchMyActivity(): Promise<ActivityEvent[]> {
+  return http<ActivityEvent[]>('/users/me/activity');
+}

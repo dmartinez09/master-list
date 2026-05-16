@@ -4,6 +4,7 @@ import Portfolio from './pages/Portfolio';
 import Countries from './pages/Countries';
 import Maturity from './pages/Maturity';
 import Execution from './pages/Execution';
+import AdminAudit from './pages/AdminAudit';
 import { Tour } from './components/ui/Tour';
 import { InitiativesProvider } from './contexts/InitiativesContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/paises" element={<Countries />} />
             <Route path="/madurez" element={<Maturity />} />
             <Route path="/ejecucion" element={<Execution />} />
+            <Route path="/admin/auditoria" element={<AdminAudit />} />
           </Routes>
         </BrowserRouter>
       </InitiativesProvider>

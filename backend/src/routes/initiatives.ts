@@ -64,6 +64,8 @@ const EditableFields = z.object({
   dimension: z.string().max(80).optional(),
   nivelMadurez: z.string().max(80).optional(),
   nivelImpacto: z.string().max(80).optional(),
+  /** Atribución del ticket (admin puede asignarlo) — string o array para compartido */
+  attributedTo: z.union([z.string().max(200), z.array(z.string().max(80)).max(10)]).optional(),
 });
 
 /** Generar próximo ID disponible (ID-001, ID-002, ...) */
@@ -99,17 +101,23 @@ initiativesRouter.post('/', requireAuth, async (req, res) => {
     const now = new Date().toISOString();
     const isManager = session.role === 'manager';
 
+    const who = session.userName ?? session.role;
     const doc = {
       id,
       ...parsed.data,
       // Managers SIEMPRE crean en "Solicitado / A validar". Admin puede elegir.
       estado: isManager ? 'Solicitado / A validar' : (parsed.data.estado ?? 'Solicitado / A validar'),
       prioridad: parsed.data.prioridad ?? 'Media',
+      // Atribución por defecto al creador (admin puede cambiar luego)
+      attributedTo: parsed.data.attributedTo ?? who,
       _created_at: now,
       _updated_at: now,
-      _updated_by: session.userName ?? session.role,
-      _created_by: session.userName ?? session.role,
+      _updated_by: who,
+      _updated_by_role: session.role,
+      _created_by: who,
       _created_by_role: session.role,
+      lastModifiedAt: now,
+      lastModifiedBy: who,
     };
     const { resource } = await initiativesContainer.items.create(doc);
     invalidateCache();
@@ -180,11 +188,17 @@ initiativesRouter.patch('/:id', requireAdmin, async (req, res) => {
     const current = resources[0];
 
     // 2) Merge con metadatos de auditoría
+    const session: SessionPayload = (req as any).session;
+    const who = session?.userName ?? session?.role ?? 'admin';
+    const now = new Date().toISOString();
     const updated = {
       ...current,
       ...patch,
-      _updated_at: new Date().toISOString(),
-      _updated_by: 'admin',
+      _updated_at: now,
+      _updated_by: who,
+      _updated_by_role: session?.role ?? 'admin',
+      lastModifiedAt: now,
+      lastModifiedBy: who,
     };
 
     // 3) Upsert + invalidar cache
@@ -221,14 +235,36 @@ initiativesRouter.patch('/:id/approval', requireAuth, async (req, res) => {
 
     const current = resources[0];
     const now = new Date().toISOString();
+    const who = session.userName ?? session.role;
+
+    // Auto-mover estado del kanban según la decisión:
+    //  · Aprobado    → "En Espera de TI / TA"
+    //  · A evaluar   → "Fuera del Plan"
+    //  · Pendiente   → no cambia estado
+    let nextEstado = current.estado;
+    if (parsed.data.approvalStatus === 'aprobado') {
+      nextEstado = 'En Espera de TI / TA';
+    } else if (parsed.data.approvalStatus === 'a-evaluar') {
+      nextEstado = 'Fuera del Plan';
+    }
+
+    // Atribución automática: la persona que aprueba/evalúa queda atribuida
+    // (si no había atribución previa o el admin no la fijó manualmente)
+    const newAttribution = current.attributedTo ?? who;
+
     const updated = {
       ...current,
+      estado: nextEstado,
       approvalStatus: parsed.data.approvalStatus,
-      approvalBy: session.userName ?? session.role,
+      approvalBy: who,
       approvalByRole: session.role,
       approvalAt: now,
+      attributedTo: newAttribution,
       _updated_at: now,
-      _updated_by: session.userName ?? session.role,
+      _updated_by: who,
+      _updated_by_role: session.role,
+      lastModifiedAt: now,
+      lastModifiedBy: who,
     };
     const { resource } = await initiativesContainer.items.upsert(updated);
     invalidateCache();

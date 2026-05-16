@@ -11,6 +11,7 @@ import { commentsRouter } from './routes/comments.js';
 import { adminRouter } from './routes/admin.js';
 import { usersRouter } from './routes/users.js';
 import { attachmentsRouter, ensureAttachmentsContainer } from './routes/attachments.js';
+import { activityRouter } from './routes/activity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +67,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/initiatives', initiativesRouter);
 app.use('/api/initiatives', commentsRouter);
 app.use('/api/initiatives', attachmentsRouter);
+app.use('/api', activityRouter); // expone /api/admin/activity y /api/users/me/activity
 
 // 404 para rutas /api/*
 app.use('/api', (req, res) => {

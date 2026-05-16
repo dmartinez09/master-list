@@ -1,7 +1,8 @@
 import React from 'react';
-import { MapPin, User } from 'lucide-react';
+import { MapPin, User, Bell } from 'lucide-react';
 import type { Iniciativa } from '../types';
 import { DimensionBadge, PrioridadDot, CostoBadge } from './ui/Badge';
+import { useIsUnseen } from '../hooks/useUnseen';
 
 interface Props {
   iniciativa: Iniciativa;
@@ -20,15 +21,27 @@ function isAnonSolicitante(s: string | undefined | null): boolean {
 }
 
 export function InitiativeCard({ iniciativa: i, onClick }: Props) {
+  const unseen = useIsUnseen(i.id, (i as any).lastModifiedAt);
   return (
     <div
       onClick={() => onClick(i)}
-      className="card-hover bg-white border border-gray-100 rounded-xl p-3.5 cursor-pointer select-none hover:border-brand-300"
+      className={`card-hover bg-white border rounded-xl p-3.5 cursor-pointer select-none hover:border-brand-300 relative ${
+        unseen ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-100'
+      }`}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <span className="text-[10px] font-mono font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">{i.id}</span>
         <div className="flex items-center gap-1">
+          {unseen && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full"
+              title={`Modificado ${new Date((i as any).lastModifiedAt).toLocaleString('es-ES')} por ${(i as any).lastModifiedBy ?? 'alguien'}`}
+            >
+              <Bell size={9} className="animate-pulse" />
+              Nuevo
+            </span>
+          )}
           <PrioridadDot label={i.prioridad} />
         </div>
       </div>
